@@ -1,0 +1,30 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap');
+
+:root { color: #1c2421; background: #edf0e8; font-family: 'DM Sans', sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; }
+button, input { font: inherit; }
+.shell { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 8vw; max-width: 1180px; min-height: 100vh; margin: 0 auto; padding: 9rem 2rem; align-items: center; }
+.intro { align-self: center; }
+.eyebrow, .section-kicker { color: #c4573f; font: 700 0.72rem 'Space Mono', monospace; letter-spacing: 0.08em; }
+h1 { margin: 1rem 0 1.25rem; font-size: clamp(4rem, 10vw, 8.5rem); line-height: 0.86; letter-spacing: -0.06em; }
+.intro p { max-width: 27rem; margin: 0; color: #65716b; font-size: 1.15rem; line-height: 1.6; }
+.panel { border-top: 4px solid #1c2421; padding: 1.75rem 0 0; }
+.panel + .panel { margin-top: 3rem; }
+.panel-heading h2 { margin: 0.45rem 0 1.5rem; font-size: 2rem; }
+form { display: grid; gap: 1rem; }
+label { display: grid; gap: 0.45rem; color: #65716b; font-size: 0.85rem; }
+input { width: 100%; border: 1px solid #bac3bc; border-radius: 0; background: #f8f9f4; padding: 0.85rem; color: #1c2421; outline: none; }
+input:focus { border-color: #c4573f; }
+button { border: 1px solid #1c2421; border-radius: 0; background: #1c2421; color: #fff; padding: 0.9rem 1rem; cursor: pointer; font-weight: 700; }
+button:hover { background: #c4573f; border-color: #c4573f; }
+button.secondary { background: transparent; color: #1c2421; }
+.hint, .muted { color: #65716b; font-size: 0.82rem; line-height: 1.5; }
+.error { color: #b13e35; font-size: 0.85rem; }
+.success { color: #267158; font-size: 0.85rem; }
+.status-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin: 2rem 0; }
+.status-grid div { border-left: 2px solid #c4573f; padding: 0.5rem 0.75rem; }
+.status-grid span, .status-grid strong { display: block; }
+.status-grid span { color: #65716b; font-size: 0.75rem; }
+.status-grid strong { margin-top: 0.4rem; font-size: 0.9rem; }
+@media (max-width: 760px) { .shell { grid-template-columns: 1fr; gap: 4rem; padding: 4rem 1.5rem; } h1 { font-size: 5rem; } }
