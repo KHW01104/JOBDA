@@ -9,6 +9,35 @@ export type User = {
   must_change_password: boolean;
 };
 
+export type Job = {
+  id: number;
+  company: string;
+  title: string;
+  job_category: string;
+  location: string;
+  experience: string;
+  employment_type: string;
+  company_size: string;
+  deadline: string;
+  source: string;
+  source_url: string;
+  status: string;
+};
+
+export type JobDetail = Job & {
+  education: string;
+  description: string;
+  published_at: string;
+};
+
+export type JobListResponse = {
+  items: Job[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+};
+
 type LoginResponse = {
   access_token: string;
   token_type: string;
@@ -44,4 +73,16 @@ export function createUser(username: string, password: string, displayName: stri
     method: "POST",
     body: JSON.stringify({ username, password, display_name: displayName }),
   });
+}
+
+export function getJobs(params: Record<string, string | number | undefined>) {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== "") query.set(key, String(value));
+  });
+  return request<JobListResponse>(`/api/jobs?${query.toString()}`);
+}
+
+export function getJob(id: number) {
+  return request<JobDetail>(`/api/jobs/${id}`);
 }
