@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     admin_username: str = "admin"
     admin_password: str = "change-me"
     cors_origins: str = "http://localhost:5173"
+    saramin_api_key: str | None = None
+    saramin_api_url: str = "https://oapi.saramin.co.kr/job-search"
+    alio_api_key: str | None = None
+    alio_api_url: str = "https://job.alio.go.kr/recruit.do"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
