@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { getJob, getJobs, Job, JobDetail, User } from "../../api/client";
+import PersonalizationPanel from "./PersonalizationPanel";
 
 type JobsPageProps = {
   user: User;
@@ -81,6 +82,7 @@ function JobsPage({ user, onLogout }: JobsPageProps) {
         {selectedJob && <aside className="job-detail"><button className="close-button" onClick={() => setSelectedJob(null)} aria-label="상세 닫기">×</button><span className="section-kicker">{selectedJob.source} / 상세</span><h2>{selectedJob.title}</h2><p className="detail-company">{selectedJob.company}</p><div className="detail-grid"><span>직무<strong>{selectedJob.job_category}</strong></span><span>경력<strong>{selectedJob.experience}</strong></span><span>지역<strong>{selectedJob.location}</strong></span><span>고용형태<strong>{selectedJob.employment_type}</strong></span><span>기업규모<strong>{selectedJob.company_size}</strong></span><span>학력<strong>{selectedJob.education}</strong></span></div><p className="detail-description">{selectedJob.description}</p><a className="source-link" href={selectedJob.source_url} target="_blank" rel="noreferrer">원본 공고 보기 ↗</a></aside>}
       </section>
       <nav className="pagination" aria-label="공고 페이지"><button disabled={page === 1} onClick={() => setPage((current) => current - 1)}>이전</button><span>{page} / {totalPages}</span><button disabled={page === totalPages} onClick={() => setPage((current) => current + 1)}>다음</button></nav>
+      <PersonalizationPanel />
     </main>
   );
 }
