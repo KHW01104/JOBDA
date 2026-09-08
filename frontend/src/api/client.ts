@@ -38,6 +38,10 @@ export type JobListResponse = {
   total_pages: number;
 };
 
+export type UserFilter = { id: number; name: string; job_categories: string[]; is_active: boolean };
+export type CompanyWatch = { id: number; company_name: string; company_id: number | null };
+export type JobScrap = { id: number; job_id: number; status: string; memo: string | null };
+
 type LoginResponse = {
   access_token: string;
   token_type: string;
@@ -86,3 +90,13 @@ export function getJobs(params: Record<string, string | number | undefined>) {
 export function getJob(id: number) {
   return request<JobDetail>(`/api/jobs/${id}`);
 }
+
+export function getFilters() { return request<UserFilter[]>("/api/personalization/filters"); }
+export function createFilter(name: string) { return request<UserFilter>("/api/personalization/filters", { method: "POST", body: JSON.stringify({ name, job_categories: [] }) }); }
+export function deleteFilter(id: number) { return request<void>(`/api/personalization/filters/${id}`, { method: "DELETE" }); }
+export function getWatches() { return request<CompanyWatch[]>("/api/personalization/watches"); }
+export function createWatch(companyName: string) { return request<CompanyWatch>("/api/personalization/watches", { method: "POST", body: JSON.stringify({ company_name: companyName }) }); }
+export function deleteWatch(id: number) { return request<void>(`/api/personalization/watches/${id}`, { method: "DELETE" }); }
+export function getScraps() { return request<JobScrap[]>("/api/personalization/scraps"); }
+export function createScrap(jobId: number) { return request<JobScrap>("/api/personalization/scraps", { method: "POST", body: JSON.stringify({ job_id: jobId }) }); }
+export function deleteScrap(id: number) { return request<void>(`/api/personalization/scraps/${id}`, { method: "DELETE" }); }
