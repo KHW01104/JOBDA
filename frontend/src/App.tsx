@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 
 import { createUser, login, User } from "./api/client";
+import JobsPage from "./features/jobs/JobsPage";
 import "./styles.css";
 
 function App() {
@@ -39,21 +40,7 @@ function App() {
   }
 
   if (user) {
-    return (
-      <main className="shell">
-        <section className="panel dashboard">
-          <div className="eyebrow">JOBDA / PHASE 1</div>
-          <h1>안녕하세요, {user.display_name}님.</h1>
-          <p className="muted">기본 인증과 역할 기반 접근이 준비되었습니다.</p>
-          <div className="status-grid">
-            <div><span>계정</span><strong>{user.username}</strong></div>
-            <div><span>역할</span><strong>{user.role}</strong></div>
-            <div><span>상태</span><strong>활성</strong></div>
-          </div>
-          <button className="secondary" onClick={() => { localStorage.removeItem("jobda_access_token"); setUser(null); }}>로그아웃</button>
-        </section>
-      </main>
-    );
+    return <JobsPage user={user} onLogout={() => { localStorage.removeItem("jobda_access_token"); setUser(null); }} />;
   }
 
   return (
