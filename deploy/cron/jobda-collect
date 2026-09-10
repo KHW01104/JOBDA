@@ -1,0 +1,2 @@
+CRON_TZ=Asia/Seoul
+0 13,18 * * * cd /opt/jobda && /usr/bin/docker compose --profile batch run --rm batch >> /var/log/jobda/collect.log 2>&1
