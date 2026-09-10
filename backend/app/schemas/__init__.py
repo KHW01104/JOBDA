@@ -8,6 +8,7 @@ from app.schemas.personalization import (
 	UserFilterCreate,
 	UserFilterResponse,
 )
+from app.schemas.notifications import NotificationEventResponse, PushSubscriptionCreate, PushSubscriptionResponse
 
 __all__ = [
 	"CompanyWatchCreate",
@@ -17,7 +18,10 @@ __all__ = [
 	"JobListItem",
 	"JobListResponse",
 	"JobScrapCreate",
-	"JobScrapResponse",
+    "JobScrapResponse",
+    "NotificationEventResponse",
+    "PushSubscriptionCreate",
+    "PushSubscriptionResponse",
 	"LoginRequest",
 	"TokenResponse",
 	"UserFilterCreate",

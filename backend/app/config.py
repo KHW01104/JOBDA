@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     saramin_api_url: str = "https://oapi.saramin.co.kr/job-search"
     alio_api_key: str | None = None
     alio_api_url: str = "https://job.alio.go.kr/recruit.do"
+    vapid_private_key: str | None = None
+    vapid_contact_email: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 
-from app.api import admin, auth, jobs, personalization
+from app.api import admin, auth, jobs, notifications, personalization
 from app.config import get_settings
 from app.database import Base, SessionLocal, engine
 from app.models import User, UserRole
@@ -45,6 +45,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 app.include_router(jobs.router, prefix="/api")
+app.include_router(notifications.router, prefix="/api")
 app.include_router(personalization.router, prefix="/api")
 
 

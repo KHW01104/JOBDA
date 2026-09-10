@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { getJob, getJobs, Job, JobDetail, User } from "../../api/client";
 import PersonalizationPanel from "./PersonalizationPanel";
+import PushPanel from "./PushPanel";
 
 type JobsPageProps = {
   user: User;
@@ -83,6 +84,7 @@ function JobsPage({ user, onLogout }: JobsPageProps) {
       </section>
       <nav className="pagination" aria-label="공고 페이지"><button disabled={page === 1} onClick={() => setPage((current) => current - 1)}>이전</button><span>{page} / {totalPages}</span><button disabled={page === totalPages} onClick={() => setPage((current) => current + 1)}>다음</button></nav>
       <PersonalizationPanel />
+      <PushPanel />
     </main>
   );
 }
