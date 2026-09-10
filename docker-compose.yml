@@ -48,5 +48,18 @@ services:
     depends_on:
       - backend
 
+  batch:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://jobda:jobda@postgres:5432/jobda
+      SARAMIN_API_KEY: ${SARAMIN_API_KEY:-}
+      ALIO_API_KEY: ${ALIO_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["batch"]
+    command: python -m app.jobs.collect
+
 volumes:
   postgres_data:
