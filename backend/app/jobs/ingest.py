@@ -1,10 +1,10 @@
 from datetime import datetime, timezone
-from hashlib import sha256
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.jobs.candidate import JobCandidate
+from app.jobs.change_detector import changed_fields, content_hash, experience_value
 from app.jobs.normalizer import normalize_candidate, normalize_name
 from app.models import Company, CompanyType, Job, JobSource, JobSourceType, JobStatus, JobVersion
 
@@ -21,6 +21,44 @@ def find_duplicate_job(database: Session, company: Company, candidate: JobCandid
             Job.deadline == candidate.deadline,
         )
     )
+
+
+def create_job_version(
+    job: Job,
+    candidate: JobCandidate,
+    version: int,
+    field_changes: dict[str, dict[str, str | None]] | None = None,
+) -> JobVersion:
+    return JobVersion(
+        job=job,
+        version=version,
+        title=candidate.title,
+        experience=experience_value(candidate),
+        employment_type=candidate.employment_type,
+        location=candidate.location,
+        deadline=candidate.deadline,
+        status=JobStatus(candidate.status),
+        content_hash=content_hash(candidate),
+        field_changes=field_changes,
+    )
+
+
+def update_job(job: Job, candidate: JobCandidate, now: datetime) -> None:
+    job.last_seen_at = now
+    job.updated_at = now
+    job.title = candidate.title
+    job.normalized_title = normalize_name(candidate.title)
+    job.job_category = candidate.job_category
+    job.experience_min = candidate.experience_min
+    job.experience_max = candidate.experience_max
+    job.experience_type = candidate.experience_type
+    job.employment_type = candidate.employment_type
+    job.location = candidate.location
+    job.education = candidate.education
+    job.published_at = candidate.published_at
+    job.deadline = candidate.deadline
+    job.status = JobStatus(candidate.status)
+    job.canonical_url = candidate.source_url or job.canonical_url
 
 
 def ingest_candidate(database: Session, candidate: JobCandidate) -> Job:
@@ -64,21 +102,7 @@ def ingest_candidate(database: Session, candidate: JobCandidate) -> Job:
             )
             database.add(job)
             database.flush()
-            database.add(
-                JobVersion(
-                    job=job,
-                    version=1,
-                    title=candidate.title,
-                    experience=candidate.experience_type,
-                    employment_type=candidate.employment_type,
-                    location=candidate.location,
-                    deadline=candidate.deadline,
-                    status=JobStatus(candidate.status),
-                    content_hash=sha256(
-                        f"{candidate.title}|{candidate.deadline}|{candidate.status}".encode()
-                    ).hexdigest(),
-                )
-            )
+            database.add(create_job_version(job, candidate, version=1))
         database.add(
             JobSource(
                 job=job,
@@ -94,13 +118,16 @@ def ingest_candidate(database: Session, candidate: JobCandidate) -> Job:
     job = database.get(Job, source.job_id)
     if job is None:
         raise ValueError(f"JobSource {source.id}가 참조하는 Job을 찾을 수 없습니다.")
-    job.last_seen_at = now
-    job.updated_at = now
-    job.title = candidate.title
-    job.normalized_title = normalize_name(candidate.title)
-    job.deadline = candidate.deadline
-    job.status = JobStatus(candidate.status)
-    job.canonical_url = candidate.source_url or job.canonical_url
+    latest_version = database.scalar(
+        select(JobVersion).where(JobVersion.job_id == job.id).order_by(JobVersion.version.desc())
+    )
+    if latest_version is None:
+        database.add(create_job_version(job, candidate, version=1))
+    elif latest_version.content_hash != content_hash(candidate):
+        field_changes = changed_fields(latest_version, candidate)
+        if field_changes:
+            database.add(create_job_version(job, candidate, version=latest_version.version + 1, field_changes=field_changes))
+    update_job(job, candidate, now)
     source.last_seen_at = now
     source.source_url = candidate.source_url or source.source_url
     source.raw_metadata = candidate.raw_metadata

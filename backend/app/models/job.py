@@ -99,6 +99,7 @@ class JobVersion(Base):
     deadline: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[JobStatus] = mapped_column(Enum(JobStatus), default=JobStatus.UNKNOWN)
     content_hash: Mapped[str] = mapped_column(String(64))
+    field_changes: Mapped[dict[str, dict[str, str | None]] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     job: Mapped[Job] = relationship(back_populates="versions")
