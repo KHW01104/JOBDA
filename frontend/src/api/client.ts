@@ -41,6 +41,8 @@ export type JobListResponse = {
 export type UserFilter = { id: number; name: string; job_categories: string[]; is_active: boolean };
 export type CompanyWatch = { id: number; company_name: string; company_id: number | null };
 export type JobScrap = { id: number; job_id: number; status: string; memo: string | null };
+export type PushSubscription = { id: number; endpoint: string; p256dh: string; auth: string; user_agent: string | null };
+export type NotificationEvent = { id: number; type: string; job_id: number | null; title: string; body: string; is_read: boolean; created_at: string };
 
 type LoginResponse = {
   access_token: string;
@@ -62,6 +64,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const body = await response.json().catch(() => ({}));
     throw new Error(body.detail ?? "요청을 처리하지 못했습니다.");
   }
+  if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
 
@@ -100,3 +103,7 @@ export function deleteWatch(id: number) { return request<void>(`/api/personaliza
 export function getScraps() { return request<JobScrap[]>("/api/personalization/scraps"); }
 export function createScrap(jobId: number) { return request<JobScrap>("/api/personalization/scraps", { method: "POST", body: JSON.stringify({ job_id: jobId }) }); }
 export function deleteScrap(id: number) { return request<void>(`/api/personalization/scraps/${id}`, { method: "DELETE" }); }
+export function createPushSubscription(subscription: { endpoint: string; p256dh: string; auth: string; user_agent: string }) { return request<PushSubscription>("/api/notifications/subscriptions", { method: "POST", body: JSON.stringify(subscription) }); }
+export function getPushSubscriptions() { return request<PushSubscription[]>("/api/notifications/subscriptions"); }
+export function deletePushSubscription(id: number) { return request<void>(`/api/notifications/subscriptions/${id}`, { method: "DELETE" }); }
+export function getNotificationEvents() { return request<NotificationEvent[]>("/api/notifications/events"); }

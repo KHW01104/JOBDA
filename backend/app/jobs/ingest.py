@@ -7,6 +7,7 @@ from app.jobs.candidate import JobCandidate
 from app.jobs.change_detector import changed_fields, content_hash, experience_value
 from app.jobs.normalizer import normalize_candidate, normalize_name
 from app.models import Company, CompanyType, Job, JobSource, JobSourceType, JobStatus, JobVersion
+from app.notifications.service import record_scrap_change_events
 
 
 def find_duplicate_job(database: Session, company: Company, candidate: JobCandidate) -> Job | None:
@@ -118,6 +119,7 @@ def ingest_candidate(database: Session, candidate: JobCandidate) -> Job:
     job = database.get(Job, source.job_id)
     if job is None:
         raise ValueError(f"JobSource {source.id}가 참조하는 Job을 찾을 수 없습니다.")
+    field_changes: dict[str, dict[str, str | None]] | None = None
     latest_version = database.scalar(
         select(JobVersion).where(JobVersion.job_id == job.id).order_by(JobVersion.version.desc())
     )
@@ -131,6 +133,8 @@ def ingest_candidate(database: Session, candidate: JobCandidate) -> Job:
     source.last_seen_at = now
     source.source_url = candidate.source_url or source.source_url
     source.raw_metadata = candidate.raw_metadata
+    if field_changes:
+        record_scrap_change_events(database, job, field_changes)
     return job
 
 
