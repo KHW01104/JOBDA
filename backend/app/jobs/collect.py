@@ -1,8 +1,12 @@
 import logging
 
-from app.collectors import AlioCollector, SaraminCollector
+from sqlalchemy import select
+
+from app.collectors import AlioCollector, NaverMailCollector
+from app.config import get_settings
 from app.database import SessionLocal
-from app.jobs.ingest import ingest_candidates
+from app.jobs.ingest import ingest_candidates_for_active_filters
+from app.models import ProcessedMail
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -10,19 +14,57 @@ logger = logging.getLogger(__name__)
 
 def run() -> int:
     total = 0
-    for collector in (SaraminCollector(), AlioCollector()):
+    with SessionLocal() as database:
+        mailbox = get_settings().naver_imap_mailbox
+        processed_mail_keys = set(
+            database.scalars(
+                select(ProcessedMail.remote_id).where(
+                    ProcessedMail.provider == "NAVER",
+                    ProcessedMail.mailbox == mailbox,
+                )
+            )
+        )
+    for collector in (NaverMailCollector(processed_mail_keys=processed_mail_keys), AlioCollector()):
         try:
             result = collector.collect()
             if result.error:
                 logger.error("source=%s failed=%s", result.source, result.error)
                 continue
             with SessionLocal() as database:
-                total += ingest_candidates(database, result.candidates)
+                total += ingest_candidates_for_active_filters(database, result.candidates)
+                record_processed_mails(database, result.candidates)
             logger.info("source=%s requested_count=%s new_count=%s", result.source, result.requested_count, result.new_count)
         finally:
             collector.close()
     logger.info("collection completed total_count=%s", total)
     return total
+
+
+def record_processed_mails(database, candidates) -> None:
+    for candidate in candidates:
+        metadata = candidate.raw_metadata or {}
+        provider = metadata.get("mail_provider")
+        mailbox = metadata.get("mailbox")
+        remote_id = metadata.get("mail_key")
+        if not provider or not mailbox or not remote_id:
+            continue
+        already_processed = database.scalar(
+            select(ProcessedMail.id).where(
+                ProcessedMail.provider == provider,
+                ProcessedMail.mailbox == mailbox,
+                ProcessedMail.remote_id == remote_id,
+            )
+        )
+        if already_processed is None:
+            database.add(
+                ProcessedMail(
+                    provider=provider,
+                    mailbox=mailbox,
+                    remote_id=remote_id,
+                    message_id=metadata.get("message_id"),
+                )
+            )
+    database.commit()
 
 
 if __name__ == "__main__":

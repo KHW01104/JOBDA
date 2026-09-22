@@ -38,7 +38,8 @@ export type JobListResponse = {
   total_pages: number;
 };
 
-export type UserFilter = { id: number; name: string; job_categories: string[]; is_active: boolean };
+export type UserFilter = { id: number; name: string; job_categories: string[]; experience_min: number | null; experience_max: number | null; locations: string[]; employment_types: string[]; company_sizes: string[]; minimum_employee_count: number | null; included_keywords: string[]; excluded_keywords: string[]; is_active: boolean };
+export type UserFilterInput = Omit<UserFilter, "id">;
 export type CompanyWatch = { id: number; company_name: string; company_id: number | null };
 export type JobScrap = { id: number; job_id: number; status: string; memo: string | null };
 export type PushSubscription = { id: number; endpoint: string; p256dh: string; auth: string; user_agent: string | null };
@@ -95,7 +96,7 @@ export function getJob(id: number) {
 }
 
 export function getFilters() { return request<UserFilter[]>("/api/personalization/filters"); }
-export function createFilter(name: string) { return request<UserFilter>("/api/personalization/filters", { method: "POST", body: JSON.stringify({ name, job_categories: [] }) }); }
+export function createFilter(filter: UserFilterInput) { return request<UserFilter>("/api/personalization/filters", { method: "POST", body: JSON.stringify(filter) }); }
 export function deleteFilter(id: number) { return request<void>(`/api/personalization/filters/${id}`, { method: "DELETE" }); }
 export function getWatches() { return request<CompanyWatch[]>("/api/personalization/watches"); }
 export function createWatch(companyName: string) { return request<CompanyWatch>("/api/personalization/watches", { method: "POST", body: JSON.stringify({ company_name: companyName }) }); }

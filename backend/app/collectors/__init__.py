@@ -1,5 +1,5 @@
 from app.collectors.alio import AlioCollector
 from app.collectors.base import CollectionResult, Collector
-from app.collectors.saramin import SaraminCollector
+from app.collectors.naver_mail import NaverMailCollector
 
-__all__ = ["AlioCollector", "CollectionResult", "Collector", "SaraminCollector"]
+__all__ = ["AlioCollector", "CollectionResult", "Collector", "NaverMailCollector"]
