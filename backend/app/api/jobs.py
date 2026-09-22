@@ -3,7 +3,10 @@ from math import ceil
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.models import User
+from app.database import get_db
+from app.models import Job, JobMatch, User
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 from app.schemas.jobs import JobDetail, JobListItem, JobListResponse
 from app.security.auth import get_current_user
 
@@ -19,6 +22,27 @@ _FIXTURE_JOBS = [
 ]
 
 
+def job_detail(job: Job) -> JobDetail:
+    source = job.sources[0] if job.sources else None
+    return JobDetail(
+        id=job.id,
+        company=job.company.name,
+        title=job.title,
+        job_category=job.job_category or "미분류",
+        location=job.location or "미정",
+        experience=job.experience_type or "미정",
+        employment_type=job.employment_type or "미정",
+        company_size=job.company.company_size or "미정",
+        deadline=job.deadline or date.max,
+        source=source.source_name if source else "수집 메일",
+        source_url=(source.source_url if source else None) or job.canonical_url or "",
+        status=job.status.value,
+        education=job.education or "미정",
+        description="사용자 조건과 일치해 수집된 공고입니다.",
+        published_at=job.published_at.date() if job.published_at else date.today(),
+    )
+
+
 @router.get("", response_model=JobListResponse)
 def list_jobs(
     q: str | None = Query(default=None),
@@ -30,9 +54,10 @@ def list_jobs(
     company_size: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=6, ge=1, le=50),
+    database: Session = Depends(get_db),
     _current_user: User = Depends(get_current_user),
 ) -> JobListResponse:
-    jobs = list(_FIXTURE_JOBS)
+    jobs = [job_detail(job) for job in database.scalars(select(Job).join(JobMatch).where(JobMatch.user_id == _current_user.id).distinct())]
     if q:
         keyword = q.casefold()
         jobs = [job for job in jobs if keyword in f"{job.company} {job.title}".casefold()]
@@ -49,8 +74,8 @@ def list_jobs(
 
 
 @router.get("/{job_id}", response_model=JobDetail)
-def get_job(job_id: int, _current_user: User = Depends(get_current_user)) -> JobDetail:
-    job = next((item for item in _FIXTURE_JOBS if item.id == job_id), None)
+def get_job(job_id: int, database: Session = Depends(get_db), _current_user: User = Depends(get_current_user)) -> JobDetail:
+    job = database.scalar(select(Job).join(JobMatch).where(Job.id == job_id, JobMatch.user_id == _current_user.id))
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="공고를 찾을 수 없습니다.")
-    return job
+    return job_detail(job)

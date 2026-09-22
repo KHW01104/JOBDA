@@ -11,8 +11,13 @@ class Settings(BaseSettings):
     admin_username: str = "admin"
     admin_password: str = "change-me"
     cors_origins: str = "http://localhost:5173"
-    saramin_api_key: str | None = None
-    saramin_api_url: str = "https://oapi.saramin.co.kr/job-search"
+    naver_imap_host: str = "imap.naver.com"
+    naver_imap_port: int = 993
+    naver_imap_username: str | None = None
+    naver_imap_app_password: str | None = None
+    naver_imap_mailbox: str = "INBOX"
+    naver_imap_allowed_senders: str = "saramin.co.kr"
+    naver_imap_max_messages: int = 100
     alio_api_key: str | None = None
     alio_api_url: str = "https://job.alio.go.kr/recruit.do"
     vapid_private_key: str | None = None

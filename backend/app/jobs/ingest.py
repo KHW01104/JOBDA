@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.jobs.candidate import JobCandidate
 from app.jobs.change_detector import changed_fields, content_hash, experience_value
 from app.jobs.normalizer import normalize_candidate, normalize_name
-from app.models import Company, CompanyType, Job, JobSource, JobSourceType, JobStatus, JobVersion
+from app.models import Company, CompanyType, Job, JobMatch, JobSource, JobSourceType, JobStatus, JobVersion, UserFilter
 from app.notifications.service import record_scrap_change_events
 
 
@@ -143,3 +143,50 @@ def ingest_candidates(database: Session, candidates: list[JobCandidate]) -> int:
         ingest_candidate(database, candidate)
     database.commit()
     return len(candidates)
+
+
+def filter_matches_candidate(user_filter: UserFilter, candidate: JobCandidate) -> bool:
+    searchable = " ".join(value for value in (candidate.company, candidate.title, candidate.job_category) if value).casefold()
+    included_keywords = [keyword.casefold() for keyword in user_filter.included_keywords if keyword.strip()]
+    excluded_keywords = [keyword.casefold() for keyword in user_filter.excluded_keywords if keyword.strip()]
+    if included_keywords and not any(keyword in searchable for keyword in included_keywords):
+        return False
+    if any(keyword in searchable for keyword in excluded_keywords):
+        return False
+    if user_filter.job_categories and candidate.job_category not in user_filter.job_categories:
+        return False
+    if user_filter.locations and candidate.location not in user_filter.locations:
+        return False
+    if user_filter.employment_types and candidate.employment_type not in user_filter.employment_types:
+        return False
+    if user_filter.experience_min is not None and (candidate.experience_min is None or candidate.experience_min < user_filter.experience_min):
+        return False
+    if user_filter.experience_max is not None and (candidate.experience_max is None or candidate.experience_max > user_filter.experience_max):
+        return False
+    if user_filter.company_sizes or user_filter.minimum_employee_count is not None:
+        return False
+    return True
+
+
+def ingest_candidates_for_active_filters(database: Session, candidates: list[JobCandidate]) -> int:
+    filters = list(database.scalars(select(UserFilter).where(UserFilter.is_active.is_(True))))
+    stored_count = 0
+    for candidate in candidates:
+        matched_filters = [user_filter for user_filter in filters if filter_matches_candidate(user_filter, candidate)]
+        if not matched_filters:
+            continue
+        job = ingest_candidate(database, candidate)
+        database.flush()
+        for user_filter in matched_filters:
+            existing_match = database.scalar(
+                select(JobMatch.id).where(
+                    JobMatch.user_id == user_filter.user_id,
+                    JobMatch.job_id == job.id,
+                    JobMatch.filter_id == user_filter.id,
+                )
+            )
+            if existing_match is None:
+                database.add(JobMatch(user_id=user_filter.user_id, job_id=job.id, filter_id=user_filter.id))
+        stored_count += 1
+    database.commit()
+    return stored_count

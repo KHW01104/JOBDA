@@ -7,7 +7,8 @@
 - 실행 시각: Asia/Seoul 기준 매일 13:00, 18:00
 - 서버에서 `/opt/jobda`를 실제 배포 경로로 바꾼 뒤 `crontab deploy/cron/jobda-collect`로 등록
 - 수집 로그: `/var/log/jobda/collect.log`
-- Gmail 수집은 계정 연동 전까지 실행 대상에서 제외
+- 네이버 메일 수집은 IMAP 활성화와 앱 비밀번호 설정 후 실행
+- 사람인 알림 메일은 `NAVER_IMAP_ALLOWED_SENDERS=saramin.co.kr` 기본값으로 수집
 
 ## 운영 배포
 

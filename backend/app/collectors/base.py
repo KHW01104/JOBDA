@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+import imaplib
 from typing import Any
 
 import httpx
@@ -34,7 +35,7 @@ class Collector(ABC):
         try:
             candidates = self.fetch_candidates()
             return CollectionResult(source=self.source, requested_count=len(candidates), candidates=candidates)
-        except (httpx.HTTPError, ValueError, KeyError) as error:
+        except (httpx.HTTPError, imaplib.IMAP4.error, OSError, ValueError, KeyError) as error:
             return CollectionResult(source=self.source, error=str(error))
 
     @abstractmethod
