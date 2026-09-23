@@ -39,6 +39,24 @@ class ProcessedMailTests(unittest.TestCase):
         self.assertEqual(len(mails), 1)
         self.assertEqual(mails[0].remote_id, "99:1")
 
+    def test_multiple_candidates_from_one_mail_are_recorded_once(self) -> None:
+        metadata = {
+            "mail_provider": "NAVER",
+            "mailbox": "INBOX",
+            "mail_key": "99:2",
+            "message_id": "<saramin-2@example.com>",
+        }
+        candidates = [
+            JobCandidate(company="JOBDA", title="백엔드 개발자", source=CandidateSource.SARAMIN, source_job_id="12346", raw_metadata=metadata),
+            JobCandidate(company="JOBDA", title="플랫폼 개발자", source=CandidateSource.SARAMIN, source_job_id="12347", raw_metadata=metadata),
+        ]
+        with Session(self.engine) as database:
+            record_processed_mails(database, candidates)
+            mails = list(database.scalars(select(ProcessedMail)))
+
+        self.assertEqual(len(mails), 1)
+        self.assertEqual(mails[0].remote_id, "99:2")
+
 
 if __name__ == "__main__":
     unittest.main()

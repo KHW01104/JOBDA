@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.jobs.ingest import reconcile_filter_matches
 from app.models import User, UserFilter, UserRole
 from app.schemas.auth import CreateUserRequest, UserResponse
 from app.schemas.personalization import UserFilterCreate, UserFilterResponse
@@ -52,6 +53,8 @@ def upsert_profile_filter(
     else:
         for field, value in payload.model_dump().items():
             setattr(user_filter, field, value)
+    database.flush()
+    reconcile_filter_matches(database, user_filter)
     database.commit()
     database.refresh(user_filter)
     return user_filter
