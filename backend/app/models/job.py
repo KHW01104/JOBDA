@@ -22,6 +22,7 @@ class JobStatus(StrEnum):
 class JobSourceType(StrEnum):
     SARAMIN = "SARAMIN"
     ALIO = "ALIO"
+    EMAIL = "EMAIL"
 
 
 class Company(Base):

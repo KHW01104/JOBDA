@@ -36,14 +36,17 @@ def normalize_candidate(candidate: JobCandidate) -> JobCandidate:
             "employment_type": normalize_text(candidate.employment_type) if candidate.employment_type else None,
             "location": normalize_text(candidate.location) if candidate.location else None,
             "education": normalize_text(candidate.education) if candidate.education else None,
+            "company_size": normalize_text(candidate.company_size) if candidate.company_size else None,
             "status": parse_status(candidate.status, candidate.deadline).value,
         }
     )
 
 
-def company_defaults(candidate: JobCandidate) -> dict[str, str]:
+def company_defaults(candidate: JobCandidate) -> dict[str, str | int | None]:
     return {
         "name": candidate.company,
         "normalized_name": normalize_name(candidate.company),
         "company_type": CompanyType.PUBLIC.value if candidate.source.value == "ALIO" else CompanyType.PRIVATE.value,
+        "company_size": candidate.company_size,
+        "employee_count": candidate.employee_count,
     }

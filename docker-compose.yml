@@ -17,7 +17,8 @@ services:
 
   backend:
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
     environment:
       DATABASE_URL: postgresql+psycopg://jobda:jobda@postgres:5432/jobda
       JWT_SECRET: local-development-secret
@@ -27,19 +28,20 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./backend:/app
-      - ./alembic:/alembic
-      - ./alembic.ini:/alembic.ini
+      - ./backend:/workspace/backend
+      - ./alembic:/workspace/alembic
+      - ./alembic.ini:/workspace/alembic.ini
     depends_on:
       postgres:
         condition: service_healthy
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: sh -c 'cd /workspace && alembic -c alembic.ini upgrade head && cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload'
 
   frontend:
     build:
       context: ./frontend
     environment:
       VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+      VITE_VAPID_PUBLIC_KEY: ${VITE_VAPID_PUBLIC_KEY:-}
     ports:
       - "5173:5173"
     volumes:
@@ -50,13 +52,14 @@ services:
 
   batch:
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
     environment:
       DATABASE_URL: postgresql+psycopg://jobda:jobda@postgres:5432/jobda
       NAVER_IMAP_USERNAME: ${NAVER_IMAP_USERNAME:-}
       NAVER_IMAP_APP_PASSWORD: ${NAVER_IMAP_APP_PASSWORD:-}
       NAVER_IMAP_MAILBOX: ${NAVER_IMAP_MAILBOX:-INBOX}
-      NAVER_IMAP_ALLOWED_SENDERS: ${NAVER_IMAP_ALLOWED_SENDERS:-saramin.co.kr}
+      NAVER_IMAP_ALLOWED_SENDERS: ${NAVER_IMAP_ALLOWED_SENDERS:-saramin.co.kr,jobkorea.co.kr,wanted.co.kr,incruit.com,catch.co.kr}
       NAVER_IMAP_MAX_MESSAGES: ${NAVER_IMAP_MAX_MESSAGES:-100}
       ALIO_API_KEY: ${ALIO_API_KEY:-}
       ALIO_API_URL: ${ALIO_API_URL:-https://opendata.alio.go.kr/new/v1/recruit/list.do}
@@ -70,13 +73,14 @@ services:
 
   scheduler:
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
     environment:
       DATABASE_URL: postgresql+psycopg://jobda:jobda@postgres:5432/jobda
       NAVER_IMAP_USERNAME: ${NAVER_IMAP_USERNAME:-}
       NAVER_IMAP_APP_PASSWORD: ${NAVER_IMAP_APP_PASSWORD:-}
       NAVER_IMAP_MAILBOX: ${NAVER_IMAP_MAILBOX:-INBOX}
-      NAVER_IMAP_ALLOWED_SENDERS: ${NAVER_IMAP_ALLOWED_SENDERS:-saramin.co.kr}
+      NAVER_IMAP_ALLOWED_SENDERS: ${NAVER_IMAP_ALLOWED_SENDERS:-saramin.co.kr,jobkorea.co.kr,wanted.co.kr,incruit.com,catch.co.kr}
       NAVER_IMAP_MAX_MESSAGES: ${NAVER_IMAP_MAX_MESSAGES:-100}
       ALIO_API_KEY: ${ALIO_API_KEY:-}
       ALIO_API_URL: ${ALIO_API_URL:-https://opendata.alio.go.kr/new/v1/recruit/list.do}

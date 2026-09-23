@@ -5,6 +5,7 @@ from datetime import date
 from email import message_from_bytes
 from email.header import decode_header
 from email.message import Message
+from email.utils import parseaddr
 from html import unescape
 from html.parser import HTMLParser
 from typing import Any
@@ -16,9 +17,9 @@ from app.jobs.candidate import CandidateSource, JobCandidate
 
 
 class NaverMailCollector(Collector):
-    """Collect Saramin job-alert emails from a user-authorized Naver IMAP mailbox."""
+    """Collect allowed job-alert emails from a user-authorized Naver IMAP mailbox."""
 
-    source = CandidateSource.SARAMIN.value
+    source = "NAVER_IMAP"
 
     def __init__(
         self,
@@ -105,16 +106,22 @@ class NaverMailCollector(Collector):
 
     def to_candidates(self, message: Message, mail_key: str) -> list[JobCandidate]:
         sender = message.get("From", "").lower()
-        if self.allowed_senders and not any(sender_domain in sender for sender_domain in self.allowed_senders):
+        sender_address = parseaddr(sender)[1].lower()
+        sender_domain = sender_address.rsplit("@", maxsplit=1)[-1]
+        if self.allowed_senders and not any(
+            sender_domain == allowed_domain or sender_domain.endswith(f".{allowed_domain}")
+            for allowed_domain in self.allowed_senders
+        ):
             return []
 
         subject = self.decode_header_value(message.get("Subject", ""))
         message_id = message.get("Message-ID", "").strip()
         candidates = [
             candidate
-            for source_url, source_job_id, text in self.saramin_job_links(message)
-            if (candidate := self.candidate_from_listing(text, source_url, source_job_id, mail_key, message_id, sender, subject))
-            is not None
+            for source_url, source_job_id, text, source, platform in self.job_links(message)
+            if (candidate := self.candidate_from_listing(
+                text, source_url, source_job_id, source, platform, mail_key, message_id, sender, subject
+            )) is not None
         ]
         if candidates:
             return candidates
@@ -130,6 +137,8 @@ class NaverMailCollector(Collector):
         text: str,
         source_url: str,
         source_job_id: str,
+        source: CandidateSource,
+        platform: str,
         mail_key: str,
         message_id: str,
         sender: str,
@@ -144,10 +153,10 @@ class NaverMailCollector(Collector):
             title=title,
             deadline=deadline,
             status="OPEN",
-            source=CandidateSource.SARAMIN,
+            source=source,
             source_job_id=source_job_id,
             source_url=source_url,
-            raw_metadata=self.mail_metadata(mail_key, message_id, sender, subject),
+            raw_metadata=self.mail_metadata(mail_key, message_id, sender, subject, platform),
         )
 
     def fallback_candidate(
@@ -159,10 +168,7 @@ class NaverMailCollector(Collector):
         subject: str,
     ) -> JobCandidate | None:
         body = self.message_text(message)
-        source_url, source_job_id = self.saramin_job_link(body)
-        if not source_job_id:
-            stable_identifier = message_id or mail_key
-            source_job_id = f"mail-{hashlib.sha256(stable_identifier.encode()).hexdigest()[:32]}"
+        source_url, source_job_id, source, platform = self.job_link(body, sender, message_id or mail_key)
 
         company = self.field_value(body, "회사명", "기업명", "회사") or self.company_from_subject(subject)
         title = self.field_value(body, "채용제목", "공고명", "모집분야", "포지션") or self.title_from_subject(subject)
@@ -177,13 +183,13 @@ class NaverMailCollector(Collector):
             employment_type=self.field_value(body, "고용형태", "근무형태"),
             deadline=self.parse_date(self.field_value(body, "마감일", "접수마감")),
             status="OPEN",
-            source=CandidateSource.SARAMIN,
+            source=source,
             source_job_id=source_job_id,
             source_url=source_url,
-            raw_metadata=self.mail_metadata(mail_key, message_id, sender, subject),
+            raw_metadata=self.mail_metadata(mail_key, message_id, sender, subject, platform),
         )
 
-    def mail_metadata(self, mail_key: str, message_id: str, sender: str, subject: str) -> dict[str, str | None]:
+    def mail_metadata(self, mail_key: str, message_id: str, sender: str, subject: str, platform: str) -> dict[str, str | None]:
         return {
             "mail_provider": "NAVER",
             "mailbox": self.mailbox,
@@ -191,6 +197,7 @@ class NaverMailCollector(Collector):
             "message_id": message_id or None,
             "sender": sender,
             "subject": subject,
+            "source_platform": platform,
         }
 
     @staticmethod
@@ -229,20 +236,26 @@ class NaverMailCollector(Collector):
                 content.append(payload.decode(part.get_content_charset() or "utf-8", errors="replace"))
         return "\n".join(content)
 
-    def saramin_job_links(self, message: Message) -> list[tuple[str, str, str]]:
-        links: list[tuple[str, str, str]] = []
+    def job_links(self, message: Message) -> list[tuple[str, str, str, CandidateSource, str]]:
+        links: list[tuple[str, str, str, CandidateSource, str]] = []
         seen_job_ids: set[str] = set()
         parser = _AnchorParser()
         parser.feed(self.html_text(message))
         for href, text in parser.links:
             source_url = self.unwrapped_url(href)
-            parsed_url = urlparse(source_url)
-            source_job_id = parse_qs(parsed_url.query).get("rec_idx", [None])[0]
-            if "/zf_user/jobs/relay/view" not in parsed_url.path or not source_job_id or source_job_id in seen_job_ids:
+            source_job_id, source, platform = self.source_for_url(source_url)
+            if not source_job_id or source_job_id in seen_job_ids:
                 continue
             seen_job_ids.add(source_job_id)
-            links.append((source_url, source_job_id, text))
+            links.append((source_url, source_job_id, text, source, platform))
         return links
+
+    def saramin_job_links(self, message: Message) -> list[tuple[str, str, str]]:
+        return [
+            (source_url, source_job_id, text)
+            for source_url, source_job_id, text, source, _ in self.job_links(message)
+            if source is CandidateSource.SARAMIN
+        ]
 
     @staticmethod
     def unwrapped_url(href: str) -> str:
@@ -269,13 +282,41 @@ class NaverMailCollector(Collector):
         return company[:200].strip(), title[:300].strip(), deadline
 
     @staticmethod
-    def saramin_job_link(body: str) -> tuple[str | None, str | None]:
+    def source_for_url(url: str) -> tuple[str | None, CandidateSource, str]:
+        parsed_url = urlparse(url)
+        hostname = (parsed_url.hostname or "").lower()
+        if hostname == "saramin.co.kr" or hostname.endswith(".saramin.co.kr"):
+            source_job_id = parse_qs(parsed_url.query).get("rec_idx", [None])[0]
+            if "/zf_user/jobs/relay/view" in parsed_url.path and source_job_id:
+                return source_job_id, CandidateSource.SARAMIN, "사람인"
+        platforms = {
+            "jobkorea.co.kr": "잡코리아",
+            "wanted.co.kr": "원티드",
+            "incruit.com": "인크루트",
+            "catch.co.kr": "캐치",
+        }
+        for domain, platform in platforms.items():
+            if hostname == domain or hostname.endswith(f".{domain}"):
+                canonical_url = parsed_url._replace(fragment="").geturl()
+                source_job_id = f"{domain}-{hashlib.sha256(canonical_url.encode()).hexdigest()[:32]}"
+                return source_job_id, CandidateSource.EMAIL, platform
+        return None, CandidateSource.EMAIL, "이메일 채용 알림"
+
+    def job_link(self, body: str, sender: str, stable_identifier: str) -> tuple[str | None, str, CandidateSource, str]:
         urls = re.findall(r"https?://[^\s\"<>]+", body)
         for url in urls:
             clean_url = url.rstrip(".,)")
-            match = re.search(r"(?:rec_idx|rec-idx)=([0-9]+)", clean_url)
-            if "saramin.co.kr" in clean_url and match:
-                return clean_url, match.group(1)
+            source_job_id, source, platform = self.source_for_url(clean_url)
+            if source_job_id:
+                return clean_url, source_job_id, source, platform
+        return None, f"mail-{hashlib.sha256(stable_identifier.encode()).hexdigest()[:32]}", CandidateSource.EMAIL, "이메일 채용 알림"
+
+    @staticmethod
+    def saramin_job_link(body: str) -> tuple[str | None, str | None]:
+        for url in re.findall(r"https?://[^\s\"<>]+", body):
+            source_job_id, source, _ = NaverMailCollector.source_for_url(url.rstrip(".,)"))
+            if source is CandidateSource.SARAMIN and source_job_id:
+                return url.rstrip(".,)"), source_job_id
         return None, None
 
     @staticmethod

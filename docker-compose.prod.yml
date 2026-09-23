@@ -12,12 +12,14 @@ services:
     restart: unless-stopped
 
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     env_file: ${ENV_FILE:-.env}
     depends_on:
       postgres:
         condition: service_healthy
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    command: sh -c 'cd /workspace && alembic -c alembic.ini upgrade head && cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000'
     restart: unless-stopped
 
   nginx:
@@ -26,6 +28,7 @@ services:
       dockerfile: nginx/Dockerfile
       args:
         VITE_API_URL: ""
+        VITE_VAPID_PUBLIC_KEY: ${VITE_VAPID_PUBLIC_KEY:-}
     ports:
       - "80:80"
     depends_on:
@@ -33,7 +36,9 @@ services:
     restart: unless-stopped
 
   batch:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     env_file: ${ENV_FILE:-.env}
     depends_on:
       postgres:
@@ -42,7 +47,9 @@ services:
     command: python -m app.jobs.collect
 
   scheduler:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     env_file: ${ENV_FILE:-.env}
     depends_on:
       postgres:

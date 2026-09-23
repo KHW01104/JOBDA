@@ -10,7 +10,7 @@ from app.jobs.ingest import ingest_candidates_for_active_filters
 from app.models import Job, JobMatch, User, UserFilter, UserRole
 
 
-def candidate(title: str, source_job_id: str) -> JobCandidate:
+def candidate(title: str, source_job_id: str, **values) -> JobCandidate:
     return JobCandidate(
         company="JOBDA",
         title=title,
@@ -18,6 +18,7 @@ def candidate(title: str, source_job_id: str) -> JobCandidate:
         status="OPEN",
         source=CandidateSource.SARAMIN,
         source_job_id=source_job_id,
+        **values,
     )
 
 
@@ -54,6 +55,26 @@ class JobMatchingTests(unittest.TestCase):
         self.assertEqual(stored, 2)
         self.assertEqual(len(jobs), 2)
         self.assertEqual({match.user_id for match in matches}, user_ids)
+
+    def test_matches_company_size_and_employee_count(self) -> None:
+        with Session(self.engine) as database:
+            user = User(username="public", password_hash="hash", display_name="공공", role=UserRole.USER)
+            database.add(user)
+            database.flush()
+            database.add(UserFilter(
+                user_id=user.id,
+                name="공공기관",
+                company_sizes=["공공기관"],
+                minimum_employee_count=100,
+            ))
+            database.commit()
+
+            stored = ingest_candidates_for_active_filters(database, [
+                candidate("기관 개발자", "public-1", company_size="공공기관", employee_count=200),
+                candidate("소규모 개발자", "private-1", company_size="중소", employee_count=20),
+            ])
+
+        self.assertEqual(stored, 1)
 
 
 if __name__ == "__main__":

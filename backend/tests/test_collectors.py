@@ -51,6 +51,15 @@ class CollectorMappingTests(unittest.TestCase):
         candidate = NaverMailCollector(allowed_senders="saramin.co.kr").to_candidate(message, "10:1")
         self.assertIsNone(candidate)
 
+    def test_naver_mail_rejects_sender_with_only_matching_suffix_text(self) -> None:
+        message = EmailMessage()
+        message["From"] = "noreply@not-saramin.co.kr"
+        message.set_content("회사명: JOBDA\n채용제목: 개발자")
+
+        candidate = NaverMailCollector(allowed_senders="saramin.co.kr").to_candidate(message, "10:1")
+
+        self.assertIsNone(candidate)
+
     def test_naver_mail_creates_multiple_candidates_from_html_alert(self) -> None:
         message = EmailMessage()
         message["From"] = "사람인 <noreply@saramin.co.kr>"
@@ -69,6 +78,24 @@ class CollectorMappingTests(unittest.TestCase):
         self.assertEqual(candidates[0].company, "JOBDA")
         self.assertEqual(candidates[1].title, "프론트엔드 개발자 채용")
         self.assertIsNone(candidates[1].deadline)
+
+    def test_naver_mail_parses_allowed_wanted_link_as_email_source(self) -> None:
+        message = EmailMessage()
+        message["From"] = "원티드 <noreply@wanted.co.kr>"
+        message["Subject"] = "[JOBDA] 채용 백엔드 개발자"
+        message["Message-ID"] = "<wanted-1@example.com>"
+        message.set_content(
+            "회사명: JOBDA\n"
+            "채용제목: 백엔드 개발자\n"
+            "https://www.wanted.co.kr/wd/12345\n"
+        )
+
+        candidate = NaverMailCollector(allowed_senders="wanted.co.kr").to_candidate(message, "10:1")
+
+        self.assertIsNotNone(candidate)
+        self.assertEqual(candidate.source.value, "EMAIL")
+        self.assertEqual(candidate.raw_metadata["source_platform"], "원티드")
+        self.assertTrue(candidate.source_job_id.startswith("wanted.co.kr-"))
 
     def test_naver_imap_skips_processed_uid(self) -> None:
         class FakeImap:
@@ -134,6 +161,7 @@ class CollectorMappingTests(unittest.TestCase):
         self.assertEqual(candidate.source_job_id, "1")
         self.assertEqual(candidate.job_category, "정보통신")
         self.assertEqual(candidate.status, "진행중")
+        self.assertEqual(candidate.company_size, "공공기관")
 
     def test_alio_uses_official_list_endpoint_and_service_key(self) -> None:
         class FakeResponse:

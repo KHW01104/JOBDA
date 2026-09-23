@@ -6,14 +6,13 @@ from sqlalchemy import select
 
 from app.api import admin, auth, jobs, notifications, personalization
 from app.config import get_settings
-from app.database import Base, SessionLocal, engine
+from app.database import SessionLocal
 from app.models import User, UserRole
 from app.security.auth import hash_password
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    Base.metadata.create_all(bind=engine)
     database = SessionLocal()
     try:
         settings = get_settings()

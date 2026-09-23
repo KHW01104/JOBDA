@@ -98,6 +98,7 @@ class AlioCollector(Collector):
             experience_type=item.get("recrutSeNm"),
             deadline=AlioCollector.parse_date(item.get("pbancEndYmd")),
             status="진행중" if item.get("ongoingYn") == "Y" else "마감",
+            company_size="공공기관",
             source=CandidateSource.ALIO,
             source_job_id=str(item.get("recrutPblntSn") or ""),
             source_url=item.get("srcUrl"),

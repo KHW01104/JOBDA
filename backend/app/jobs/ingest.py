@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.jobs.candidate import JobCandidate
 from app.jobs.change_detector import changed_fields, content_hash, experience_value
-from app.jobs.normalizer import normalize_candidate, normalize_name
+from app.jobs.normalizer import company_defaults, normalize_candidate, normalize_name
 from app.models import Company, CompanyType, Job, JobMatch, JobSource, JobSourceType, JobStatus, JobVersion, UserFilter
 from app.notifications.service import record_scrap_change_events
 
@@ -66,11 +66,7 @@ def ingest_candidate(database: Session, candidate: JobCandidate) -> Job:
     candidate = normalize_candidate(candidate)
     company = database.scalar(select(Company).where(Company.normalized_name == normalize_name(candidate.company)))
     if company is None:
-        company = Company(
-            name=candidate.company,
-            normalized_name=normalize_name(candidate.company),
-            company_type=CompanyType.PUBLIC if candidate.source.value == "ALIO" else CompanyType.PRIVATE,
-        )
+        company = Company(**company_defaults(candidate))
         database.add(company)
         database.flush()
 
@@ -82,6 +78,10 @@ def ingest_candidate(database: Session, candidate: JobCandidate) -> Job:
         )
     )
     now = datetime.now(timezone.utc)
+    if candidate.company_size:
+        company.company_size = candidate.company_size
+    if candidate.employee_count is not None:
+        company.employee_count = candidate.employee_count
     if source is None:
         job = find_duplicate_job(database, company, candidate)
         if job is None:
@@ -108,7 +108,7 @@ def ingest_candidate(database: Session, candidate: JobCandidate) -> Job:
             JobSource(
                 job=job,
                 source_type=source_type,
-                source_name=source_type.value,
+                source_name=(candidate.raw_metadata or {}).get("source_platform") or source_type.value,
                 source_job_id=candidate.source_job_id,
                 source_url=candidate.source_url,
                 raw_metadata=candidate.raw_metadata,
@@ -163,7 +163,11 @@ def filter_matches_candidate(user_filter: UserFilter, candidate: JobCandidate) -
         return False
     if user_filter.experience_max is not None and (candidate.experience_max is None or candidate.experience_max > user_filter.experience_max):
         return False
-    if user_filter.company_sizes or user_filter.minimum_employee_count is not None:
+    if user_filter.company_sizes and candidate.company_size not in user_filter.company_sizes:
+        return False
+    if user_filter.minimum_employee_count is not None and (
+        candidate.employee_count is None or candidate.employee_count < user_filter.minimum_employee_count
+    ):
         return False
     return True
 

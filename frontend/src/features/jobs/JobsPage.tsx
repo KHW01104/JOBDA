@@ -1,7 +1,6 @@
 import { type ReactNode, useEffect, useState } from "react";
 
 import { getJob, getJobs, Job, JobDetail, User } from "../../api/client";
-import PersonalizationPanel from "./PersonalizationPanel";
 import PushPanel from "./PushPanel";
 
 type JobsPageProps = {
@@ -137,14 +136,14 @@ function JobsPage({ user, onLogout }: JobsPageProps) {
       <section className="dashboard-hero">
         <nav className="dashboard-nav liquid-glass">
           <a className="dashboard-logo" href="#top">JOBDA</a>
-          <div className="dashboard-nav-links"><a href="#jobs">공고</a><a href="#settings">내 조건</a><a href="#settings">관심기업</a><a href="#alerts">알림</a></div>
+          <div className="dashboard-nav-links"><a href="#jobs">공고</a><a href="#alerts">알림</a></div>
           <button className="dashboard-logout" onClick={onLogout}>로그아웃</button>
         </nav>
         <div className="dashboard-hero-content" id="top">
           <div className="dashboard-hero-main">
             <AnimatedHeading />
             <FadeIn delay={800}><p className="dashboard-subtitle">원하는 조건의 공고를 모으고, 다음 기회를 선명하게 준비하세요.</p></FadeIn>
-            <FadeIn delay={1200} className="dashboard-actions"><a className="dashboard-primary-action" href="#jobs">공고 보기</a><a className="dashboard-secondary-action liquid-glass" href="#settings">내 조건 설정</a></FadeIn>
+            <FadeIn delay={1200} className="dashboard-actions"><a className="dashboard-primary-action" href="#jobs">공고 보기</a><a className="dashboard-secondary-action liquid-glass" href="#alerts">알림 보기</a></FadeIn>
           </div>
           <FadeIn delay={1400} className="dashboard-tag"><div className="liquid-glass">맞춤 공고. 조건 저장. 알림.</div></FadeIn>
         </div>
@@ -165,7 +164,6 @@ function JobsPage({ user, onLogout }: JobsPageProps) {
         {selectedJob && <aside className="job-detail"><button className="close-button" onClick={() => setSelectedJob(null)} aria-label="상세 닫기">×</button><span className="section-kicker">{selectedJob.source} / 상세</span><h2>{selectedJob.title}</h2><p className="detail-company">{selectedJob.company}</p><div className="detail-grid"><span>직무<strong>{selectedJob.job_category}</strong></span><span>경력<strong>{selectedJob.experience}</strong></span><span>지역<strong>{selectedJob.location}</strong></span><span>고용형태<strong>{selectedJob.employment_type}</strong></span><span>기업규모<strong>{selectedJob.company_size}</strong></span><span>학력<strong>{selectedJob.education}</strong></span></div><p className="detail-description">{selectedJob.description}</p><a className="source-link" href={selectedJob.source_url} target="_blank" rel="noreferrer">원본 공고 보기 ↗</a></aside>}
       </section>
       <nav className="pagination" aria-label="공고 페이지"><button disabled={page === 1} onClick={() => setPage((current) => current - 1)}>이전</button><span>{page} / {totalPages}</span><button disabled={page === totalPages} onClick={() => setPage((current) => current + 1)}>다음</button></nav>
-      <div id="settings"><PersonalizationPanel /></div>
       <div id="alerts"><PushPanel /></div>
       </div>
     </main>
