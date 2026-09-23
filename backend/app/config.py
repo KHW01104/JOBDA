@@ -19,7 +19,9 @@ class Settings(BaseSettings):
     naver_imap_allowed_senders: str = "saramin.co.kr"
     naver_imap_max_messages: int = 100
     alio_api_key: str | None = None
-    alio_api_url: str = "https://job.alio.go.kr/recruit.do"
+    alio_api_url: str = "https://opendata.alio.go.kr/new/v1/recruit/list.do"
+    alio_api_detail_url: str = "https://opendata.alio.go.kr/new/v1/recruit/detail.do"
+    alio_api_page_size: int = 100
     vapid_private_key: str | None = None
     vapid_contact_email: str | None = None
 

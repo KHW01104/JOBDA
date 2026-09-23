@@ -41,5 +41,15 @@ services:
     profiles: ["batch"]
     command: python -m app.jobs.collect
 
+  scheduler:
+    build: ./backend
+    env_file: ${ENV_FILE:-.env}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["scheduler"]
+    command: sh -c 'while true; do python -m app.jobs.collect; sleep "$${COLLECTION_INTERVAL_MINUTES:-30}"m; done'
+    restart: unless-stopped
+
 volumes:
   postgres_data:
