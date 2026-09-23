@@ -9,6 +9,7 @@ from app.jobs.ingest import ingest_candidates_for_active_filters
 from app.models import ProcessedMail, UserFilter
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
@@ -47,6 +48,7 @@ def run() -> int:
 
 
 def record_processed_mails(database, candidates) -> None:
+    recorded_keys: set[tuple[str, str, str]] = set()
     for candidate in candidates:
         metadata = candidate.raw_metadata or {}
         provider = metadata.get("mail_provider")
@@ -54,11 +56,15 @@ def record_processed_mails(database, candidates) -> None:
         remote_id = metadata.get("mail_key")
         if not provider or not mailbox or not remote_id:
             continue
+        key = (provider, mailbox, remote_id)
+        if key in recorded_keys:
+            continue
+        recorded_keys.add(key)
         already_processed = database.scalar(
             select(ProcessedMail.id).where(
-                ProcessedMail.provider == provider,
-                ProcessedMail.mailbox == mailbox,
-                ProcessedMail.remote_id == remote_id,
+                ProcessedMail.provider == key[0],
+                ProcessedMail.mailbox == key[1],
+                ProcessedMail.remote_id == key[2],
             )
         )
         if already_processed is None:

@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.jobs.candidate import JobCandidate
+from app.jobs.candidate import CandidateSource, JobCandidate
 from app.jobs.change_detector import changed_fields, content_hash, experience_value
 from app.jobs.normalizer import company_defaults, normalize_candidate, normalize_name
 from app.models import Company, CompanyType, Job, JobMatch, JobSource, JobSourceType, JobStatus, JobVersion, UserFilter
@@ -146,30 +146,57 @@ def ingest_candidates(database: Session, candidates: list[JobCandidate]) -> int:
 
 
 def filter_matches_candidate(user_filter: UserFilter, candidate: JobCandidate) -> bool:
-    searchable = " ".join(value for value in (candidate.company, candidate.title, candidate.job_category) if value).casefold()
+    searchable = " ".join(value for value in (candidate.title, candidate.job_category) if value).casefold()
     included_keywords = [keyword.casefold() for keyword in user_filter.included_keywords if keyword.strip()]
     excluded_keywords = [keyword.casefold() for keyword in user_filter.excluded_keywords if keyword.strip()]
     if included_keywords and not any(keyword in searchable for keyword in included_keywords):
         return False
     if any(keyword in searchable for keyword in excluded_keywords):
         return False
-    if user_filter.job_categories and candidate.job_category not in user_filter.job_categories:
+    if not list_value_matches(user_filter.job_categories, candidate.job_category):
         return False
-    if user_filter.locations and candidate.location not in user_filter.locations:
+    if not list_value_matches(user_filter.locations, candidate.location):
         return False
-    if user_filter.employment_types and candidate.employment_type not in user_filter.employment_types:
+    if not list_value_matches(user_filter.employment_types, candidate.employment_type):
         return False
-    if user_filter.experience_min is not None and (candidate.experience_min is None or candidate.experience_min < user_filter.experience_min):
+    if not experience_matches_filter(user_filter, candidate):
         return False
-    if user_filter.experience_max is not None and (candidate.experience_max is None or candidate.experience_max > user_filter.experience_max):
-        return False
-    if user_filter.company_sizes and candidate.company_size not in user_filter.company_sizes:
+    if not list_value_matches(user_filter.company_sizes, candidate.company_size):
         return False
     if user_filter.minimum_employee_count is not None and (
         candidate.employee_count is None or candidate.employee_count < user_filter.minimum_employee_count
     ):
         return False
     return True
+
+
+def list_value_matches(expected_values: list[str], candidate_value: str | None) -> bool:
+    if not expected_values or not candidate_value:
+        return True
+    normalized_value = candidate_value.casefold()
+    return any(
+        (normalized_expected := expected.casefold()) in normalized_value or normalized_value in normalized_expected
+        for expected in expected_values
+        if expected.strip()
+    )
+
+
+def experience_matches_filter(user_filter: UserFilter, candidate: JobCandidate) -> bool:
+    if user_filter.experience_min is None and user_filter.experience_max is None:
+        return True
+    if candidate.experience_min is not None or candidate.experience_max is not None:
+        if user_filter.experience_min is not None and (
+            candidate.experience_min is None or candidate.experience_min < user_filter.experience_min
+        ):
+            return False
+        if user_filter.experience_max is not None and (
+            candidate.experience_max is None or candidate.experience_max > user_filter.experience_max
+        ):
+            return False
+        return True
+    if candidate.experience_type is None:
+        return True
+    return user_filter.experience_max == 0 and "신입" in candidate.experience_type
 
 
 def ingest_candidates_for_active_filters(database: Session, candidates: list[JobCandidate]) -> int:
@@ -194,3 +221,51 @@ def ingest_candidates_for_active_filters(database: Session, candidates: list[Job
         stored_count += 1
     database.commit()
     return stored_count
+
+
+def candidate_from_job(job: Job) -> JobCandidate:
+    source = job.sources[0] if job.sources else None
+    return JobCandidate(
+        company=job.company.name,
+        title=job.title,
+        job_category=job.job_category,
+        experience_min=job.experience_min,
+        experience_max=job.experience_max,
+        experience_type=job.experience_type,
+        employment_type=job.employment_type,
+        location=job.location,
+        education=job.education,
+        published_at=job.published_at,
+        deadline=job.deadline,
+        status=job.status.value,
+        company_size=job.company.company_size,
+        employee_count=job.company.employee_count,
+        source=CandidateSource(source.source_type.value) if source else CandidateSource.EMAIL,
+        source_job_id=source.source_job_id if source else str(job.id),
+        source_url=source.source_url if source else job.canonical_url,
+    )
+
+
+def reconcile_filter_matches(database: Session, user_filter: UserFilter) -> int:
+    jobs = list(
+        database.scalars(
+            select(Job).join(JobMatch).where(JobMatch.filter_id == user_filter.id).distinct()
+        )
+    )
+    removed_count = 0
+    for job in jobs:
+        if user_filter.is_active and filter_matches_candidate(user_filter, candidate_from_job(job)):
+            continue
+        matches = list(
+            database.scalars(
+                select(JobMatch).where(JobMatch.filter_id == user_filter.id, JobMatch.job_id == job.id)
+            )
+        )
+        for match in matches:
+            database.delete(match)
+            removed_count += 1
+    database.flush()
+    for job in jobs:
+        if database.scalar(select(JobMatch.id).where(JobMatch.job_id == job.id)) is None:
+            database.delete(job)
+    return removed_count
