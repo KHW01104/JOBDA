@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict
 class CandidateSource(StrEnum):
     SARAMIN = "SARAMIN"
     ALIO = "ALIO"
+    EMAIL = "EMAIL"
 
 
 class JobCandidate(BaseModel):
@@ -24,6 +25,8 @@ class JobCandidate(BaseModel):
     published_at: datetime | None = None
     deadline: date | None = None
     status: str | None = None
+    company_size: str | None = None
+    employee_count: int | None = None
     source: CandidateSource
     source_job_id: str
     source_url: str | None = None

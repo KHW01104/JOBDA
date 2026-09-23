@@ -1,12 +1,12 @@
 import logging
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.collectors import AlioCollector, NaverMailCollector
 from app.config import get_settings
 from app.database import SessionLocal
 from app.jobs.ingest import ingest_candidates_for_active_filters
-from app.models import ProcessedMail
+from app.models import ProcessedMail, UserFilter
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -15,6 +15,12 @@ logger = logging.getLogger(__name__)
 def run() -> int:
     total = 0
     with SessionLocal() as database:
+        active_filter_count = database.scalar(
+            select(func.count()).select_from(UserFilter).where(UserFilter.is_active.is_(True))
+        )
+        if not active_filter_count:
+            logger.info("collection skipped because no active user filters exist")
+            return total
         mailbox = get_settings().naver_imap_mailbox
         processed_mail_keys = set(
             database.scalars(

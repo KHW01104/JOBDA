@@ -87,6 +87,8 @@ button.secondary { background: transparent; color: #1c2421; }
 .personalization-grid h3 { margin: 0 0 1rem; font-size: 1rem; }
 .personalization-grid form { display: grid; gap: .5rem; }
 .personalization-grid form input { min-width: 0; }
+.condition-number-inputs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+.condition-number-inputs label { min-width: 0; }
 .personalization-grid form button { white-space: nowrap; padding: .65rem .75rem; font-size: .78rem; }
 .personalization-grid ul { list-style: none; padding: 0; margin: 1rem 0 0; }
 .personalization-grid li { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #cdd4cc; padding: .6rem 0; color: #65716b; font-size: .84rem; }
@@ -140,6 +142,7 @@ button.secondary { background: transparent; color: #1c2421; }
 .personalization-grid li { color: hsl(var(--muted-foreground)); }
 .personalization-grid input { border-color: rgba(255, 255, 255, .25); background: rgba(255, 255, 255, .07); color: white; }
 .personalization-grid input::placeholder { color: rgba(255, 255, 255, .55); }
+.condition-number-inputs label { color: rgba(255, 255, 255, .65); }
 .icon-button { color: white; }
 .icon-button:hover { color: hsl(var(--muted-foreground)); }
 .personalization-panel > ul { color: hsl(var(--muted-foreground)); }

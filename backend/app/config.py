@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     naver_imap_username: str | None = None
     naver_imap_app_password: str | None = None
     naver_imap_mailbox: str = "INBOX"
-    naver_imap_allowed_senders: str = "saramin.co.kr"
+    naver_imap_allowed_senders: str = "saramin.co.kr,jobkorea.co.kr,wanted.co.kr,incruit.com,catch.co.kr"
     naver_imap_max_messages: int = 100
     alio_api_key: str | None = None
     alio_api_url: str = "https://opendata.alio.go.kr/new/v1/recruit/list.do"
