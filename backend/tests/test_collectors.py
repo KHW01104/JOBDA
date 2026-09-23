@@ -118,16 +118,95 @@ class CollectorMappingTests(unittest.TestCase):
     def test_alio_mapping(self) -> None:
         candidate = AlioCollector.to_candidate(
             {
-                "기관명": "공공기관",
-                "채용제목": "개발자",
-                "공고번호": "alio-1",
-                "채용종료일": "2099.12.31",
+                "instNm": "공공기관",
+                "recrutPbancTtl": "개발자",
+                "recrutPblntSn": 1,
+                "pbancEndYmd": "2099.12.31",
+                "ncsCdNmLst": "정보통신",
+                "workRgnNmLst": "서울",
+                "hireTypeNmLst": "정규직",
+                "ongoingYn": "Y",
             }
         )
 
         self.assertEqual(candidate.company, "공공기관")
         self.assertEqual(candidate.source.value, "ALIO")
-        self.assertEqual(candidate.source_job_id, "alio-1")
+        self.assertEqual(candidate.source_job_id, "1")
+        self.assertEqual(candidate.job_category, "정보통신")
+        self.assertEqual(candidate.status, "진행중")
+
+    def test_alio_uses_official_list_endpoint_and_service_key(self) -> None:
+        class FakeResponse:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"resultCode": 200, "resultMsg": "성공했습니다.", "result": []}
+
+        class FakeClient:
+            def __init__(self):
+                self.request: tuple[str, str, dict[str, object]] | None = None
+
+            def post(self, url, params):
+                self.request = ("POST", url, params)
+                return FakeResponse()
+
+            def close(self):
+                return None
+
+        client = FakeClient()
+        collector = AlioCollector(client=client, api_key="test-key", endpoint="https://example.com/list.do")
+
+        self.assertEqual(collector.fetch_candidates(), [])
+        self.assertEqual(
+            client.request,
+            ("POST", "https://example.com/list.do", {"serviceKey": "test-key", "resultType": "json", "ongoingYn": "Y", "pageNo": 1, "numOfRows": 100}),
+        )
+
+    def test_alio_collects_all_pages_and_merges_details(self) -> None:
+        class FakeResponse:
+            def __init__(self, payload):
+                self.payload = payload
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return self.payload
+
+        class FakeClient:
+            def __init__(self):
+                self.calls: list[tuple[str, dict[str, object]]] = []
+
+            def post(self, url, params):
+                self.calls.append((url, params))
+                if url.endswith("list.do"):
+                    item = {
+                        "instNm": "공공기관",
+                        "recrutPbancTtl": f"공고 {params['pageNo']}",
+                        "recrutPblntSn": params["pageNo"],
+                        "ongoingYn": "Y",
+                    }
+                    return FakeResponse({"resultCode": 200, "result": [item], "totalCount": 2})
+                return FakeResponse({"resultCode": 200, "result": {"srcUrl": "https://example.com/posting", "pbancEndYmd": "2099-12-31"}})
+
+            def close(self):
+                return None
+
+        client = FakeClient()
+        collector = AlioCollector(
+            client=client,
+            api_key="test-key",
+            endpoint="https://example.com/list.do",
+            detail_endpoint="https://example.com/detail.do",
+            page_size=1,
+        )
+
+        candidates = collector.fetch_candidates()
+
+        self.assertEqual([candidate.title for candidate in candidates], ["공고 1", "공고 2"])
+        self.assertTrue(all(candidate.source_url == "https://example.com/posting" for candidate in candidates))
+        self.assertEqual(len(client.calls), 4)
 
 
 if __name__ == "__main__":

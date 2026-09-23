@@ -1,0 +1,1 @@
+*/30 * * * * cd /opt/jobda && /usr/bin/docker compose -f docker-compose.prod.yml --profile batch run --rm batch >> /var/log/jobda-collection.log 2>&1
