@@ -122,6 +122,9 @@ button.secondary { background: transparent; color: #1c2421; }
 .filter-bar select option { color: #102b3b; background: #edf0e8; }
 .filter-bar input:focus, .filter-bar select:focus { border-color: white; }
 .jobs-content { gap: 1.25rem; }
+.jobs-content { grid-template-columns: minmax(0, 1fr); }
+.jobs-content.has-detail { grid-template-columns: minmax(0, 1fr) minmax(19rem, 24rem); }
+.filter-bar { grid-template-columns: minmax(15rem, 2fr) repeat(3, minmax(8rem, 1fr)); }
 .job-list { overflow: hidden; border: 1px solid rgba(255, 255, 255, .16); border-radius: 1.25rem; background: rgba(3, 20, 31, .55); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
 .job-row { border-color: rgba(255, 255, 255, .14); color: white; padding: 1.35rem 1.25rem; }
 .job-row:hover { background: rgba(255, 255, 255, .1); }
@@ -147,10 +150,21 @@ button.secondary { background: transparent; color: #1c2421; }
 .icon-button:hover { color: hsl(var(--muted-foreground)); }
 .personalization-panel > ul { color: hsl(var(--muted-foreground)); }
 .error { color: #ffb4aa; }
+.schedule-section { margin-top: 4rem; scroll-margin-top: 1rem; }
+.schedule-heading { display: flex; align-items: end; justify-content: space-between; gap: 1.5rem; margin-bottom: 1rem; padding: 2rem; border: 1px solid rgba(255, 255, 255, .16); border-radius: 1.25rem; background: rgba(3, 20, 31, .56); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.schedule-heading h2 { margin: .45rem 0; color: #fff; font-family: var(--font-display); font-size: clamp(2rem, 4vw, 3.5rem); font-weight: 400; letter-spacing: -.04em; }
+.schedule-heading p, .schedule-card p { margin: 0; color: hsl(var(--muted-foreground)); line-height: 1.6; }
+.schedule-count { flex: 0 0 auto; border: 1px solid rgba(255, 255, 255, .2); border-radius: 999px; padding: .55rem .8rem; color: #fff; font-size: .8rem; }
+.schedule-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1rem; }
+.schedule-card, .schedule-empty { border: 1px solid rgba(255, 255, 255, .16); border-radius: 1.1rem; background: rgba(3, 20, 31, .55); padding: 1.4rem; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.schedule-card > span { color: rgba(255, 255, 255, .65); font-size: .75rem; }
+.schedule-card h3 { margin: .55rem 0 1rem; color: #fff; font-size: 1.1rem; font-weight: 500; }
+.schedule-card strong { display: block; margin-bottom: 1rem; color: #fff; font-size: .95rem; }
+.schedule-empty { color: hsl(var(--muted-foreground)); }
 
-@media (max-width: 900px) { .jobs-shell { width: min(100% - 2rem, 1440px); } .jobs-heading { padding: 3rem 1.25rem 2rem; } }
+@media (max-width: 900px) { .jobs-shell { width: min(100% - 2rem, 1440px); } .jobs-heading { padding: 3rem 1.25rem 2rem; } .jobs-content.has-detail { grid-template-columns: 1fr; } .filter-bar { grid-template-columns: repeat(3, minmax(0, 1fr)); } .schedule-heading { align-items: start; flex-direction: column; padding: 1.5rem; } }
 @media (max-width: 900px) { .filter-search { grid-column: span 3; } }
-@media (max-width: 560px) { .jobs-shell { width: min(100% - 1.5rem, 1440px); padding-top: calc(.75rem + env(safe-area-inset-top)); } .topbar { padding: 1rem; } .jobs-heading { padding: 2.5rem 1rem 1.5rem; } .filter-bar { padding: .75rem; } .filter-search { grid-column: span 2; } .job-row { padding: 1rem; } .personalization-panel { padding: 1.25rem; } }
+@media (max-width: 560px) { .jobs-shell { width: min(100% - 1.5rem, 1440px); padding-top: calc(.75rem + env(safe-area-inset-top)); } .topbar { padding: 1rem; } .jobs-heading { padding: 2.5rem 1rem 1.5rem; } .filter-bar { padding: .75rem; } .filter-search { grid-column: span 2; } .job-row { padding: 1rem; } .personalization-panel { padding: 1.25rem; } .schedule-section { margin-top: 2.5rem; } .schedule-heading { padding: 1.25rem; } }
 
 /* 로그인 후 첫 화면: 제공된 시네마틱 히어로 사양 */
 .jobs-page { overflow-x: hidden; background: #000; color: #fff; }
@@ -191,3 +205,42 @@ button.secondary { background: transparent; color: #1c2421; }
 @media (min-width: 1024px) { .dashboard-hero-content { display: grid; grid-template-columns: 1fr 1fr; align-items: end; } .dashboard-tag { justify-content: flex-end; } .dashboard-tag > div { font-size: 1.5rem; } }
 @media (max-width: 560px) { .dashboard-hero { padding: calc(1.5rem + env(safe-area-inset-top)) 1.5rem calc(3rem + env(safe-area-inset-bottom)); } .dashboard-nav { padding: .5rem .75rem; } .dashboard-logo { font-size: 1.25rem; } .dashboard-logout { padding: .65rem 1rem; } .dashboard-title { font-size: clamp(2.1rem, 11vw, 3rem); } .dashboard-title-line { white-space: normal; } .dashboard-tag > div { padding: .7rem 1rem; font-size: 1rem; } }
 @media (prefers-reduced-motion: reduce) { .dashboard-background, .dashboard-background-current.is-transitioning, .dashboard-background-previous { animation: none; } }
+
+/* 화면 폭과 브라우저 배율이 달라도 콘텐츠 비율을 유지하는 공통 보정 */
+.jobs-page { overflow-x: hidden; overflow-y: auto; }
+.dashboard-hero { min-height: min(100dvh, 58rem); padding: clamp(1rem, 3vw, 2rem) clamp(1rem, 5vw, 4rem) clamp(2.5rem, 6vw, 4rem); }
+.dashboard-hero-content { gap: clamp(1.5rem, 4vw, 3rem); padding-top: clamp(3rem, 8vw, 7rem); }
+.jobs-shell { width: min(calc(100% - clamp(1.5rem, 5vw, 4rem)), 90rem); min-height: 0; padding: clamp(2rem, 5vw, 4rem) 0 clamp(3rem, 6vw, 5rem); }
+.jobs-heading { padding: clamp(2rem, 6vw, 4.5rem) clamp(1rem, 3vw, 2rem) clamp(1.5rem, 4vw, 2.5rem); }
+.filter-bar { grid-template-columns: minmax(14rem, 2fr) repeat(3, minmax(7.5rem, 1fr)); }
+.job-row { grid-template-columns: minmax(4rem, .65fr) minmax(0, 1fr) minmax(4.5rem, .7fr); }
+.job-main { min-width: 0; }
+.job-main b, .job-main small { overflow-wrap: anywhere; }
+.schedule-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }
+
+@media (max-width: 1100px) {
+  .filter-bar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .filter-search { grid-column: span 3; }
+}
+
+@media (max-width: 720px) {
+  .dashboard-hero { min-height: 42rem; }
+  .jobs-shell { width: min(calc(100% - 2rem), 90rem); }
+  .jobs-content.has-detail { grid-template-columns: minmax(0, 1fr); }
+  .filter-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .filter-search { grid-column: span 2; }
+  .job-row { grid-template-columns: minmax(0, 1fr) auto; gap: .75rem; }
+  .job-source { display: none; }
+  .job-meta { min-width: 3.5rem; }
+  .schedule-heading { align-items: start; flex-direction: column; }
+}
+
+@media (max-width: 420px) {
+  .dashboard-hero { min-height: 38rem; padding-inline: 1rem; }
+  .dashboard-actions > a { flex: 1 1 100%; }
+  .jobs-shell { width: min(calc(100% - 1.5rem), 90rem); }
+  .jobs-heading h1 { font-size: clamp(2.35rem, 13vw, 3.2rem); }
+  .topbar { gap: .75rem; }
+  .user-menu { gap: .75rem; }
+  .schedule-card, .schedule-empty { padding: 1.15rem; }
+}

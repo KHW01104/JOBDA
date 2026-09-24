@@ -6,6 +6,7 @@ from typing import Any
 import httpx
 
 from app.jobs.candidate import JobCandidate
+from app.schedules import RecruitmentScheduleCandidate
 
 
 @dataclass
@@ -13,6 +14,7 @@ class CollectionResult:
     source: str
     requested_count: int = 0
     candidates: list[JobCandidate] = field(default_factory=list)
+    schedules: list[RecruitmentScheduleCandidate] = field(default_factory=list)
     error: str | None = None
 
     @property

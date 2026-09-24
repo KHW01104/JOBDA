@@ -1,3 +1,4 @@
+from datetime import date
 import unittest
 
 from sqlalchemy import create_engine, select
@@ -5,8 +6,9 @@ from sqlalchemy.orm import Session
 
 from app.database import Base
 from app.jobs.candidate import CandidateSource, JobCandidate
-from app.jobs.collect import record_processed_mails
-from app.models import ProcessedMail
+from app.jobs.collect import ingest_recruitment_schedules, record_processed_mails
+from app.models import ProcessedMail, RecruitmentSchedule
+from app.schedules import RecruitmentScheduleCandidate
 
 
 class ProcessedMailTests(unittest.TestCase):
@@ -56,6 +58,23 @@ class ProcessedMailTests(unittest.TestCase):
 
         self.assertEqual(len(mails), 1)
         self.assertEqual(mails[0].remote_id, "99:2")
+
+    def test_recruitment_schedule_is_stored_once(self) -> None:
+        schedule = RecruitmentScheduleCandidate(
+            title="사람인 주간 공채 일정",
+            period_start=date(2026, 9, 22),
+            period_end=date(2026, 9, 28),
+            source_name="사람인",
+            mail_remote_id="99:3",
+            mailbox="프로모션",
+        )
+        with Session(self.engine) as database:
+            self.assertEqual(ingest_recruitment_schedules(database, [schedule]), 1)
+            self.assertEqual(ingest_recruitment_schedules(database, [schedule]), 0)
+            schedules = list(database.scalars(select(RecruitmentSchedule)))
+
+        self.assertEqual(len(schedules), 1)
+        self.assertEqual(schedules[0].mail_remote_id, "99:3")
 
 
 if __name__ == "__main__":

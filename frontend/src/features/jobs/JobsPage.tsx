@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useState } from "react";
 
-import { getJob, getJobs, Job, JobDetail, User } from "../../api/client";
+import { getJob, getJobs, getRecruitmentSchedules, Job, JobDetail, RecruitmentSchedule, User } from "../../api/client";
 import PushPanel from "./PushPanel";
 
 type JobsPageProps = {
@@ -51,7 +51,7 @@ function FadeIn({ children, delay, className = "" }: FadeInProps) {
 
 function AnimatedHeading() {
   const [visible, setVisible] = useState(false);
-  const lines = ["비전과 행동으로", "내일의 채용을 만듦."];
+  const lines = ["비전과 행동으로", "더 나은 내일을 위해."];
 
   useEffect(() => {
     const timer = window.setTimeout(() => setVisible(true), 200);
@@ -69,6 +69,10 @@ function formatDeadline(deadline: string) {
   return deadline.replaceAll("-", ".").slice(5);
 }
 
+function formatPeriod(start: string, end: string) {
+  return `${formatDeadline(start)} — ${formatDeadline(end)}`;
+}
+
 function JobsPage({ user, onLogout }: JobsPageProps) {
   const [currentHour, setCurrentHour] = useState(() => new Date().getHours());
   const [displayBackground, setDisplayBackground] = useState(() => backgroundForHour(new Date().getHours()));
@@ -78,6 +82,7 @@ function JobsPage({ user, onLogout }: JobsPageProps) {
   const [page, setPage] = useState(1);
   const [selectedJob, setSelectedJob] = useState<JobDetail | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [schedules, setSchedules] = useState<RecruitmentSchedule[]>([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [error, setError] = useState("");
@@ -116,6 +121,14 @@ function JobsPage({ user, onLogout }: JobsPageProps) {
     return () => { cancelled = true; };
   }, [activeFilters, page, query, sort]);
 
+  useEffect(() => {
+    let cancelled = false;
+    getRecruitmentSchedules()
+      .then((result) => { if (!cancelled) setSchedules(result); })
+      .catch((requestError) => { if (!cancelled) setError(requestError instanceof Error ? requestError.message : "공채 일정을 불러오지 못했습니다."); });
+    return () => { cancelled = true; };
+  }, []);
+
   async function openJob(job: Job) {
     try {
       setSelectedJob(await getJob(job.id));
@@ -136,7 +149,7 @@ function JobsPage({ user, onLogout }: JobsPageProps) {
       <section className="dashboard-hero">
         <nav className="dashboard-nav liquid-glass">
           <a className="dashboard-logo" href="#top">JOBDA</a>
-          <div className="dashboard-nav-links"><a href="#jobs">공고</a><a href="#alerts">알림</a></div>
+          <div className="dashboard-nav-links"><a href="#jobs">공고</a><a href="#schedules">공채 일정</a><a href="#alerts">알림</a></div>
           <button className="dashboard-logout" onClick={onLogout}>로그아웃</button>
         </nav>
         <div className="dashboard-hero-content" id="top">
@@ -150,8 +163,8 @@ function JobsPage({ user, onLogout }: JobsPageProps) {
       </section>
       <div className="jobs-shell">
       <section className="jobs-heading" id="jobs">
-        <div><span className="section-kicker">OPEN ROLES</span><h1>공고를 찾아보세요.</h1><p>{total}개의 테스트 공고가 준비되어 있습니다.</p></div>
-        <div className="source-note">사람인 · ALIO<br /><small>테스트 데이터 기반</small></div>
+        <div><span className="section-kicker">OPEN ROLES</span><h1>공고를 찾아보세요.</h1><p>{total}개의 맞춤 공고가 준비되어 있습니다.</p></div>
+        <div className="source-note">사람인 · ALIO<br /><small>맞춤 조건 기반</small></div>
       </section>
       <section className="filter-bar" aria-label="공고 필터">
         <label className="filter-search"><span>검색</span><input aria-label="회사명 또는 공고명 검색" placeholder="회사명 또는 공고명 검색" value={query} onChange={(event) => { setPage(1); setQuery(event.target.value); }} /></label>
@@ -159,11 +172,15 @@ function JobsPage({ user, onLogout }: JobsPageProps) {
         {Object.entries(filters).map(([name, values]) => <label className="filter-control" key={name}><span>{name === "job_category" ? "직무" : name === "company_size" ? "기업규모" : name === "employment_type" ? "고용형태" : name === "experience" ? "경력" : "지역"}</span><select aria-label={name} value={activeFilters[name] ?? ""} onChange={(event) => updateFilter(name, event.target.value)}>{values.map((value) => <option key={value} value={value}>{value || "전체"}</option>)}</select></label>)}
       </section>
       {error && <p className="error page-error">{error}</p>}
-      <section className="jobs-content">
+      <section className={`jobs-content ${selectedJob ? "has-detail" : ""}`}>
         <div className="job-list">{jobs.map((job) => <button className="job-row" key={job.id} onClick={() => openJob(job)}><span className="job-source">{job.source}</span><span className="job-main"><strong>{job.company}</strong><b>{job.title}</b><small>{job.job_category} · {job.experience} · {job.location}</small></span><span className="job-meta"><strong>D-{Math.max(0, Math.ceil((new Date(`${job.deadline}T00:00:00`).getTime() - Date.now()) / 86400000))}</strong><small>{formatDeadline(job.deadline)}</small></span></button>)}</div>
         {selectedJob && <aside className="job-detail"><button className="close-button" onClick={() => setSelectedJob(null)} aria-label="상세 닫기">×</button><span className="section-kicker">{selectedJob.source} / 상세</span><h2>{selectedJob.title}</h2><p className="detail-company">{selectedJob.company}</p><div className="detail-grid"><span>직무<strong>{selectedJob.job_category}</strong></span><span>경력<strong>{selectedJob.experience}</strong></span><span>지역<strong>{selectedJob.location}</strong></span><span>고용형태<strong>{selectedJob.employment_type}</strong></span><span>기업규모<strong>{selectedJob.company_size}</strong></span><span>학력<strong>{selectedJob.education}</strong></span></div><p className="detail-description">{selectedJob.description}</p><a className="source-link" href={selectedJob.source_url} target="_blank" rel="noreferrer">원본 공고 보기 ↗</a></aside>}
       </section>
       <nav className="pagination" aria-label="공고 페이지"><button disabled={page === 1} onClick={() => setPage((current) => current - 1)}>이전</button><span>{page} / {totalPages}</span><button disabled={page === totalPages} onClick={() => setPage((current) => current + 1)}>다음</button></nav>
+      <section className="schedule-section" id="schedules">
+        <div className="schedule-heading"><div><span className="section-kicker">RECRUITMENT CALENDAR</span><h2>이번 주 공채 일정</h2><p>맞춤 공고와 분리해, 사람인에서 받은 주간 공채 일정을 확인합니다.</p></div><span className="schedule-count">{schedules.length}개 일정</span></div>
+        {schedules.length > 0 ? <div className="schedule-grid">{schedules.map((schedule) => <article className="schedule-card" key={schedule.id}><span>{schedule.source_name}</span><h3>{schedule.title}</h3><strong>{formatPeriod(schedule.period_start, schedule.period_end)}</strong><p>직무 맞춤 공고와 별도로 제공되는 공채 일정입니다.</p></article>)}</div> : <p className="schedule-empty">수집된 공채 일정이 없습니다.</p>}
+      </section>
       <div id="alerts"><PushPanel /></div>
       </div>
     </main>

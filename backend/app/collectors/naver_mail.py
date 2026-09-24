@@ -1,7 +1,8 @@
+import base64
 import hashlib
 import imaplib
 import re
-from datetime import date
+from datetime import date, datetime
 from email import message_from_bytes
 from email.header import decode_header
 from email.message import Message
@@ -14,6 +15,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 from app.collectors.base import CollectionResult, Collector
 from app.config import get_settings
 from app.jobs.candidate import CandidateSource, JobCandidate
+from app.schedules import RecruitmentScheduleCandidate
 
 
 class NaverMailCollector(Collector):
@@ -28,7 +30,7 @@ class NaverMailCollector(Collector):
         mailbox: str | None = None,
         allowed_senders: str | None = None,
         max_messages: int | None = None,
-        processed_mail_keys: set[str] | None = None,
+        processed_mail_keys: set[tuple[str, str]] | None = None,
         imap_client: Any | None = None,
     ) -> None:
         super().__init__()
@@ -37,7 +39,8 @@ class NaverMailCollector(Collector):
         self.port = settings.naver_imap_port
         self.username = username if username is not None else settings.naver_imap_username
         self.app_password = app_password if app_password is not None else settings.naver_imap_app_password
-        self.mailbox = mailbox or settings.naver_imap_mailbox
+        self.mailboxes = self.mailbox_names(mailbox or settings.naver_imap_mailbox)
+        self.mailbox = self.mailboxes[0]
         sender_value = allowed_senders if allowed_senders is not None else settings.naver_imap_allowed_senders
         self.allowed_senders = {sender.strip().lower() for sender in sender_value.split(",") if sender.strip()}
         self.max_messages = max_messages if max_messages is not None else settings.naver_imap_max_messages
@@ -46,14 +49,18 @@ class NaverMailCollector(Collector):
 
     def collect(self) -> CollectionResult:
         try:
-            candidates = self.fetch_candidates()
-            return CollectionResult(source=self.source, requested_count=len(candidates), candidates=candidates)
+            candidates, schedules = self.fetch_content()
+            return CollectionResult(source=self.source, requested_count=len(candidates) + len(schedules), candidates=candidates, schedules=schedules)
         except imaplib.IMAP4.error:
             return CollectionResult(source=self.source, error="네이버 IMAP 인증 또는 연결 설정에 실패했습니다.")
         except (OSError, ValueError, KeyError) as error:
             return CollectionResult(source=self.source, error=str(error))
 
     def fetch_candidates(self) -> list[JobCandidate]:
+        candidates, _ = self.fetch_content()
+        return candidates
+
+    def fetch_content(self) -> tuple[list[JobCandidate], list[RecruitmentScheduleCandidate]]:
         if not self.username or not self.app_password:
             raise ValueError("NAVER_IMAP_USERNAME 및 NAVER_IMAP_APP_PASSWORD 설정이 필요합니다.")
         if self.max_messages < 1:
@@ -65,29 +72,34 @@ class NaverMailCollector(Collector):
             status, _ = client.login(self.username, self.app_password)
             if status != "OK":
                 raise ValueError("네이버 IMAP 로그인에 실패했습니다.")
-            status, _ = client.select(self.mailbox, readonly=True)
-            if status != "OK":
-                raise ValueError(f"네이버 IMAP 메일함을 열 수 없습니다: {self.mailbox}")
-            uid_validity = self.uid_validity(client)
-            status, data = client.uid("search", None, "ALL")
-            if status != "OK":
-                raise ValueError("네이버 IMAP 메일 검색에 실패했습니다.")
-
-            uids = data[0].split()[-self.max_messages :]
             candidates: list[JobCandidate] = []
-            for uid_bytes in uids:
-                uid = uid_bytes.decode()
-                mail_key = f"{uid_validity}:{uid}"
-                if mail_key in self.processed_mail_keys:
-                    continue
-                status, message_data = client.uid("fetch", uid, "(RFC822)")
-                if status != "OK" or not message_data or not message_data[0]:
-                    raise ValueError(f"네이버 IMAP 메일을 읽을 수 없습니다: uid={uid}")
-                raw_message = message_data[0][1]
-                if not isinstance(raw_message, bytes):
-                    raise ValueError(f"네이버 IMAP 메일 형식이 올바르지 않습니다: uid={uid}")
-                candidates.extend(self.to_candidates(message_from_bytes(raw_message), mail_key))
-            return candidates
+            schedules: list[RecruitmentScheduleCandidate] = []
+            for mailbox in self.mailboxes:
+                status, _ = client.select(self.imap_mailbox_name(mailbox), readonly=True)
+                if status != "OK":
+                    raise ValueError(f"네이버 IMAP 메일함을 열 수 없습니다: {mailbox}")
+                uid_validity = self.uid_validity(client)
+                status, data = client.uid("search", None, "ALL")
+                if status != "OK":
+                    raise ValueError("네이버 IMAP 메일 검색에 실패했습니다.")
+
+                uids = data[0].split()[-self.max_messages :]
+                for uid_bytes in uids:
+                    uid = uid_bytes.decode()
+                    mail_key = f"{uid_validity}:{uid}"
+                    if (mailbox, mail_key) in self.processed_mail_keys:
+                        continue
+                    status, message_data = client.uid("fetch", uid, "(RFC822)")
+                    if status != "OK" or not message_data or not message_data[0]:
+                        raise ValueError(f"네이버 IMAP 메일을 읽을 수 없습니다: uid={uid}")
+                    raw_message = message_data[0][1]
+                    if not isinstance(raw_message, bytes):
+                        raise ValueError(f"네이버 IMAP 메일 형식이 올바르지 않습니다: uid={uid}")
+                    message = message_from_bytes(raw_message)
+                    candidates.extend(self.to_candidates(message, mail_key, mailbox))
+                    if schedule := self.schedule_from_message(message, mail_key, mailbox):
+                        schedules.append(schedule)
+            return candidates, schedules
         finally:
             if owns_client:
                 try:
@@ -104,7 +116,7 @@ class NaverMailCollector(Collector):
         value = values[0]
         return value.decode() if isinstance(value, bytes) else str(value)
 
-    def to_candidates(self, message: Message, mail_key: str) -> list[JobCandidate]:
+    def to_candidates(self, message: Message, mail_key: str, mailbox: str | None = None) -> list[JobCandidate]:
         sender = message.get("From", "").lower()
         sender_address = parseaddr(sender)[1].lower()
         sender_domain = sender_address.rsplit("@", maxsplit=1)[-1]
@@ -120,17 +132,38 @@ class NaverMailCollector(Collector):
             candidate
             for source_url, source_job_id, text, source, platform in self.job_links(message)
             if (candidate := self.candidate_from_listing(
-                text, source_url, source_job_id, source, platform, mail_key, message_id, sender, subject
+                text, source_url, source_job_id, source, platform, mail_key, message_id, sender, subject, mailbox or self.mailbox
             )) is not None
         ]
         if candidates:
             return candidates
-        fallback = self.fallback_candidate(message, mail_key, message_id, sender, subject)
+        fallback = self.fallback_candidate(message, mail_key, message_id, sender, subject, mailbox or self.mailbox)
         return [fallback] if fallback is not None else []
 
-    def to_candidate(self, message: Message, mail_key: str) -> JobCandidate | None:
-        candidates = self.to_candidates(message, mail_key)
+    def to_candidate(self, message: Message, mail_key: str, mailbox: str | None = None) -> JobCandidate | None:
+        candidates = self.to_candidates(message, mail_key, mailbox)
         return candidates[0] if candidates else None
+
+    def schedule_from_message(self, message: Message, mail_key: str, mailbox: str | None = None) -> RecruitmentScheduleCandidate | None:
+        sender_domain = parseaddr(message.get("From", ""))[1].lower().rsplit("@", maxsplit=1)[-1]
+        if not sender_domain.endswith("saramin.co.kr"):
+            return None
+        subject = self.decode_header_value(message.get("Subject", ""))
+        match = re.search(r"공채 일정.*?\((\d{1,2})/(\d{1,2})\s*~\s*(\d{1,2})/(\d{1,2})\)", subject)
+        if match is None:
+            return None
+        start_month, start_day, end_month, end_day = (int(value) for value in match.groups())
+        year = datetime.now().year
+        period_start = date(year, start_month, start_day)
+        period_end = date(year + (end_month < start_month), end_month, end_day)
+        return RecruitmentScheduleCandidate(
+            title="사람인 주간 공채 일정",
+            period_start=period_start,
+            period_end=period_end,
+            source_name="사람인",
+            mail_remote_id=mail_key,
+            mailbox=mailbox or self.mailbox,
+        )
 
     def candidate_from_listing(
         self,
@@ -143,6 +176,7 @@ class NaverMailCollector(Collector):
         message_id: str,
         sender: str,
         subject: str,
+        mailbox: str,
     ) -> JobCandidate | None:
         listing = self.parse_listing(text)
         if listing is None:
@@ -156,7 +190,7 @@ class NaverMailCollector(Collector):
             source=source,
             source_job_id=source_job_id,
             source_url=source_url,
-            raw_metadata=self.mail_metadata(mail_key, message_id, sender, subject, platform),
+            raw_metadata=self.mail_metadata(mail_key, message_id, sender, subject, platform, mailbox),
         )
 
     def fallback_candidate(
@@ -166,6 +200,7 @@ class NaverMailCollector(Collector):
         message_id: str,
         sender: str,
         subject: str,
+        mailbox: str,
     ) -> JobCandidate | None:
         body = self.message_text(message)
         source_url, source_job_id, source, platform = self.job_link(body, sender, message_id or mail_key)
@@ -186,19 +221,49 @@ class NaverMailCollector(Collector):
             source=source,
             source_job_id=source_job_id,
             source_url=source_url,
-            raw_metadata=self.mail_metadata(mail_key, message_id, sender, subject, platform),
+            raw_metadata=self.mail_metadata(mail_key, message_id, sender, subject, platform, mailbox),
         )
 
-    def mail_metadata(self, mail_key: str, message_id: str, sender: str, subject: str, platform: str) -> dict[str, str | None]:
+    def mail_metadata(self, mail_key: str, message_id: str, sender: str, subject: str, platform: str, mailbox: str) -> dict[str, str | None]:
         return {
             "mail_provider": "NAVER",
-            "mailbox": self.mailbox,
+            "mailbox": mailbox,
             "mail_key": mail_key,
             "message_id": message_id or None,
             "sender": sender,
             "subject": subject,
             "source_platform": platform,
         }
+
+    @staticmethod
+    def mailbox_names(value: str) -> tuple[str, ...]:
+        names = tuple(name.strip() for name in value.split(",") if name.strip())
+        if not names:
+            raise ValueError("NAVER_IMAP_MAILBOX에 하나 이상의 메일함을 설정해야 합니다.")
+        return names
+
+    @staticmethod
+    def imap_mailbox_name(mailbox: str) -> str:
+        encoded: list[str] = []
+        non_ascii: list[str] = []
+
+        def flush_non_ascii() -> None:
+            if non_ascii:
+                value = "".join(non_ascii).encode("utf-16-be")
+                encoded.append("&" + base64.b64encode(value).decode().rstrip("=").replace("/", ",") + "-")
+                non_ascii.clear()
+
+        for character in mailbox:
+            if " " <= character <= "~" and character != "&":
+                flush_non_ascii()
+                encoded.append(character)
+            elif character == "&":
+                flush_non_ascii()
+                encoded.append("&-")
+            else:
+                non_ascii.append(character)
+        flush_non_ascii()
+        return "".join(encoded)
 
     @staticmethod
     def decode_header_value(value: str) -> str:
