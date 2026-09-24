@@ -7,6 +7,8 @@ from app.config import get_settings
 from app.database import SessionLocal
 from app.jobs.ingest import ingest_candidates_for_active_filters
 from app.models import ProcessedMail, UserFilter
+from app.models import RecruitmentSchedule
+from app.schedules import RecruitmentScheduleCandidate
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -22,14 +24,14 @@ def run() -> int:
         if not active_filter_count:
             logger.info("collection skipped because no active user filters exist")
             return total
-        mailbox = get_settings().naver_imap_mailbox
+        mailboxes = NaverMailCollector.mailbox_names(get_settings().naver_imap_mailbox)
         processed_mail_keys = set(
-            database.scalars(
-                select(ProcessedMail.remote_id).where(
+            database.execute(
+                select(ProcessedMail.mailbox, ProcessedMail.remote_id).where(
                     ProcessedMail.provider == "NAVER",
-                    ProcessedMail.mailbox == mailbox,
+                    ProcessedMail.mailbox.in_(mailboxes),
                 )
-            )
+            ).tuples()
         )
     for collector in (NaverMailCollector(processed_mail_keys=processed_mail_keys), AlioCollector()):
         try:
@@ -39,7 +41,8 @@ def run() -> int:
                 continue
             with SessionLocal() as database:
                 total += ingest_candidates_for_active_filters(database, result.candidates)
-                record_processed_mails(database, result.candidates)
+                total += ingest_recruitment_schedules(database, result.schedules)
+                record_processed_mails(database, result.candidates, result.schedules)
             logger.info("source=%s requested_count=%s new_count=%s", result.source, result.requested_count, result.new_count)
         finally:
             collector.close()
@@ -47,7 +50,25 @@ def run() -> int:
     return total
 
 
-def record_processed_mails(database, candidates) -> None:
+def ingest_recruitment_schedules(database, schedules: list[RecruitmentScheduleCandidate]) -> int:
+    stored_count = 0
+    for schedule in schedules:
+        if database.scalar(select(RecruitmentSchedule.id).where(RecruitmentSchedule.mail_remote_id == schedule.mail_remote_id)) is None:
+            database.add(
+                RecruitmentSchedule(
+                    title=schedule.title,
+                    period_start=schedule.period_start,
+                    period_end=schedule.period_end,
+                    source_name=schedule.source_name,
+                    mail_remote_id=schedule.mail_remote_id,
+                )
+            )
+            stored_count += 1
+    database.commit()
+    return stored_count
+
+
+def record_processed_mails(database, candidates, schedules: list[RecruitmentScheduleCandidate] = ()) -> None:
     recorded_keys: set[tuple[str, str, str]] = set()
     for candidate in candidates:
         metadata = candidate.raw_metadata or {}
@@ -76,6 +97,14 @@ def record_processed_mails(database, candidates) -> None:
                     message_id=metadata.get("message_id"),
                 )
             )
+    for schedule in schedules:
+        provider, mailbox, remote_id = "NAVER", schedule.mailbox, schedule.mail_remote_id
+        key = (provider, mailbox, remote_id)
+        if key in recorded_keys:
+            continue
+        recorded_keys.add(key)
+        if database.scalar(select(ProcessedMail.id).where(ProcessedMail.provider == provider, ProcessedMail.mailbox == mailbox, ProcessedMail.remote_id == remote_id)) is None:
+            database.add(ProcessedMail(provider=provider, mailbox=mailbox, remote_id=remote_id))
     database.commit()
 
 

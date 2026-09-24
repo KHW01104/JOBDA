@@ -97,6 +97,20 @@ class CollectorMappingTests(unittest.TestCase):
         self.assertEqual(candidate.raw_metadata["source_platform"], "원티드")
         self.assertTrue(candidate.source_job_id.startswith("wanted.co.kr-"))
 
+    def test_naver_mail_parses_saramin_weekly_recruitment_schedule(self) -> None:
+        message = EmailMessage()
+        message["From"] = "사람인 <openrecruitmatching@mailinfo.saramin.co.kr>"
+        message["Subject"] = "김현우님, 업데이트된 공채 일정을 확인해 보세요! (09/22 ~ 09/28)"
+
+        schedule = NaverMailCollector(allowed_senders="saramin.co.kr").schedule_from_message(message, "99:3")
+
+        self.assertIsNotNone(schedule)
+        self.assertEqual(schedule.title, "사람인 주간 공채 일정")
+        self.assertEqual(schedule.period_start.isoformat(), "2026-09-22")
+        self.assertEqual(schedule.period_end.isoformat(), "2026-09-28")
+        self.assertEqual(schedule.mail_remote_id, "99:3")
+        self.assertEqual(schedule.mailbox, "INBOX")
+
     def test_naver_imap_skips_processed_uid(self) -> None:
         class FakeImap:
             def login(self, username, password):
@@ -118,7 +132,7 @@ class CollectorMappingTests(unittest.TestCase):
         collector = NaverMailCollector(
             username="jobda@naver.com",
             app_password="app-password",
-            processed_mail_keys={"99:1"},
+            processed_mail_keys={("INBOX", "99:1")},
             imap_client=FakeImap(),
         )
 
@@ -127,6 +141,9 @@ class CollectorMappingTests(unittest.TestCase):
         self.assertEqual(len(candidates), 1)
         self.assertEqual(candidates[0].source_job_id, "2")
         self.assertEqual(candidates[0].raw_metadata["mail_key"], "99:2")
+
+    def test_naver_imap_encodes_promotion_mailbox_name(self) -> None:
+        self.assertEqual(NaverMailCollector.imap_mailbox_name("프로모션"), "&1QS4XLqowVg-")
 
     def test_naver_imap_does_not_return_account_identifier_in_auth_error(self) -> None:
         class AuthFailureImap:

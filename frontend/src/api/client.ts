@@ -1,4 +1,9 @@
-const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+const configuredApiUrl = import.meta.env.VITE_API_URL;
+const pageHostname = typeof window === "undefined" ? null : window.location.hostname;
+const usesLocalApi = configuredApiUrl ? new URL(configuredApiUrl).hostname === "localhost" : true;
+const apiUrl = pageHostname && usesLocalApi && pageHostname !== "localhost" && pageHostname !== "127.0.0.1"
+  ? `${window.location.protocol}//${pageHostname}:8000`
+  : configuredApiUrl ?? "http://localhost:8000";
 
 export type User = {
   id: number;
@@ -43,6 +48,7 @@ export type UserFilterInput = Omit<UserFilter, "id">;
 export type CompanyWatch = { id: number; company_name: string; company_id: number | null };
 export type JobScrap = { id: number; job_id: number; status: string; memo: string | null };
 export type PushSubscription = { id: number; endpoint: string; p256dh: string; auth: string; user_agent: string | null };
+export type RecruitmentSchedule = { id: number; source_name: string; title: string; period_start: string; period_end: string };
 export type NotificationEvent = { id: number; type: string; job_id: number | null; title: string; body: string; is_read: boolean; created_at: string };
 
 type LoginResponse = {
@@ -94,6 +100,8 @@ export function getJobs(params: Record<string, string | number | undefined>) {
 export function getJob(id: number) {
   return request<JobDetail>(`/api/jobs/${id}`);
 }
+
+export function getRecruitmentSchedules() { return request<RecruitmentSchedule[]>("/api/recruitment-schedules"); }
 
 export function getFilters() { return request<UserFilter[]>("/api/personalization/filters"); }
 export function createFilter(filter: UserFilterInput) { return request<UserFilter>("/api/personalization/filters", { method: "POST", body: JSON.stringify(filter) }); }
